@@ -1,0 +1,55 @@
+# Local Copilot and deployment session artifacts
+.copilot-azure/
+
+# .NET build and test outputs
+**/bin/
+**/obj/
+TestResults/
+coverage/
+coverage.*
+*.coverage
+*.coveragexml
+
+# Visual Studio, VS Code, and JetBrains user state
+.vs/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/settings.json
+!.vscode/tasks.json
+.idea/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.DotSettings.user
+
+# Node, Vite, and TypeScript generated artifacts
+**/node_modules/
+**/dist/
+**/.vite/
+**/.cache/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Generated infrastructure templates
+/infra/main.json
+
+# Local environment files and secrets
+.env
+.env.*
+!.env.example
+!.env.template
+
+# Operating system and editor artifacts
+.DS_Store
+Thumbs.db
+*~
+*.swp
+*.tmp
+
+# General logs
+*.log

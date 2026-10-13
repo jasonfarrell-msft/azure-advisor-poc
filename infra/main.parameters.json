@@ -1,0 +1,30 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "environmentName": {
+      "value": "azure-advisor-dev-46b2-eus2"
+    },
+    "location": {
+      "value": "eastus2"
+    },
+    "sessionId": {
+      "value": "46b21c5d-b57e-413b-8219-f72d001eae54"
+    },
+    "deployedBy": {
+      "value": "Jason Farrell"
+    },
+    "createdAt": {
+      "value": "2026-10-12T23:54:08Z"
+    },
+    "enableSubscriptionReaderAssignment": {
+      "value": true
+    },
+    "acrPublicNetworkAccessEnabled": {
+      "value": true
+    },
+    "containerImage": {
+      "value": "crazureadvisordev46b2eus2.azurecr.io/azure-advisor@sha256:00a4cdc592fe75f6d443a03b62a9dcc518c28b48ed59b95a27833fcca62788af"
+    }
+  }
+}

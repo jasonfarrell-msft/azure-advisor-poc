@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/" />
+  <Folder Name="/src/backend/">
+    <Project Path="src/backend/AzureCostAdvisor.Api/AzureCostAdvisor.Api.csproj" />
+    <Project Path="src/backend/AzureCostAdvisor.Core/AzureCostAdvisor.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/AzureCostAdvisor.Tests/AzureCostAdvisor.Tests.csproj" />
+  </Folder>
+</Solution>
