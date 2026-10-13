@@ -24,7 +24,7 @@
       "value": true
     },
     "containerImage": {
-      "value": "crazureadvisordev46b2eus2.azurecr.io/azure-advisor@sha256:898df48258c5dfb47085e3bccf24f8dd6c3917e3ca6c304c1ba4a533f10174ee"
+      "value": "crazureadvisordev46b2eus2.azurecr.io/azure-cost-advisor@sha256:07b173d6dce9838accadb46dc7240d87064b81a801bad5026b66c6cbcfa29e58"
     }
   }
 }

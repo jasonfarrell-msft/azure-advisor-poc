@@ -92,9 +92,12 @@ No resources were predicted for deletion. The predicted deployments include the 
 
 ## Next Steps
 
-1. Build and deploy the reviewed backend image by immutable digest.
-2. Apply the validated Bicep changes to persist Easy Auth and the Foundry managed-identity role.
-3. Deploy the reviewed frontend bundle and verify the authenticated Static Web App route, direct backend rejection, ten-second scan, Foundry capability, and chat preview.
+Deployment completed after this preflight:
+
+- Backend image digest `sha256:07b173d6dce9838accadb46dc7240d87064b81a801bad5026b66c6cbcfa29e58` is active on healthy revision `ca-azure-advisor-dev-46b2-eus2--0000004` with 100% traffic.
+- Container Apps Easy Auth is enabled with the Azure Static Web Apps provider; unauthenticated direct backend requests return HTTP 401.
+- The managed identity has **Cognitive Services OpenAI User** at the Foundry account scope.
+- The frontend production bundle was deployed to `https://white-field-0e69d3010.2.azurestaticapps.net`; unauthenticated frontend and API requests redirect to Entra sign-in.
 
 ---
 
