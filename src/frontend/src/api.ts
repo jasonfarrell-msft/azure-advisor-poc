@@ -1,4 +1,10 @@
-import { AnalysisResult, RecommendationCard, ScheduleCalculationResult, SubscriptionInfo } from './types';
+import {
+  AdvisorCapabilities,
+  AnalysisResult,
+  RecommendationCard,
+  ScheduleCalculationResult,
+  SubscriptionInfo
+} from './types';
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '');
 
@@ -7,6 +13,12 @@ export async function fetchMode(): Promise<string> {
   if (!res.ok) throw new Error('Failed to fetch advisor mode');
   const data = await res.json();
   return data.mode;
+}
+
+export async function fetchCapabilities(): Promise<AdvisorCapabilities> {
+  const res = await fetch(`${API_BASE}/settings/capabilities`);
+  if (!res.ok) throw new Error('Failed to fetch advisor capabilities');
+  return res.json();
 }
 
 export async function fetchSubscriptions(mode?: string): Promise<SubscriptionInfo[]> {
@@ -34,13 +46,6 @@ export async function runAnalysisScan(
     const err = await res.json().catch(() => ({}));
     throw new Error(err.detail || err.title || 'Failed to complete analysis scan');
   }
-  return res.json();
-}
-
-export async function fetchLatestAnalysis(): Promise<AnalysisResult | null> {
-  const res = await fetch(`${API_BASE}/analysis/latest`);
-  if (res.status === 404) return null;
-  if (!res.ok) throw new Error('Failed to load latest analysis');
   return res.json();
 }
 

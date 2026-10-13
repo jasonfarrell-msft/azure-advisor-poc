@@ -10,6 +10,7 @@ public class SyntheticDemoDataProvider : IAzureDataProvider
     public const string ProductionSubscriptionId = "00000000-0000-0000-0000-demo00000001";
     public const string EngineeringSubscriptionId = "00000000-0000-0000-0000-demo00000002";
     public const string LegacySubscriptionId = "00000000-0000-0000-0000-demo00000003";
+    public static readonly TimeSpan SimulatedScanDuration = TimeSpan.FromSeconds(10);
 
     private static readonly List<SubscriptionInfo> DemoSubscriptions =
     [
@@ -48,6 +49,11 @@ public class SyntheticDemoDataProvider : IAzureDataProvider
     public Task<IReadOnlyList<SubscriptionInfo>> GetSubscriptionsAsync(CancellationToken ct = default)
     {
         return Task.FromResult<IReadOnlyList<SubscriptionInfo>>(DemoSubscriptions);
+    }
+
+    public Task SimulateScanAsync(CancellationToken ct = default)
+    {
+        return Task.Delay(SimulatedScanDuration, ct);
     }
 
     public Task<IReadOnlyList<AzureResource>> GetResourcesAsync(string subscriptionId, CancellationToken ct = default)

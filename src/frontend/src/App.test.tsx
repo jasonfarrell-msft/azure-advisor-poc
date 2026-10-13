@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
 import {
   explainRecommendation,
-  fetchLatestAnalysis,
+  fetchCapabilities,
   fetchMode,
   fetchSubscriptions,
   runAnalysisScan
@@ -13,7 +13,7 @@ import { AnalysisResult, RecommendationCategory, SubscriptionInfo } from './type
 
 vi.mock('./api', () => ({
   explainRecommendation: vi.fn(),
-  fetchLatestAnalysis: vi.fn(),
+  fetchCapabilities: vi.fn(),
   fetchMode: vi.fn(),
   fetchSubscriptions: vi.fn(),
   runAnalysisScan: vi.fn()
@@ -105,7 +105,13 @@ function createAnalysis(
 describe('demo subscription experience', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(fetchLatestAnalysis).mockResolvedValue(null);
+    vi.mocked(fetchCapabilities).mockResolvedValue({
+      foundryConfigured: true,
+      foundryDeployment: 'gpt-5.4-mini',
+      foundryProject: 'finops-advisor-project',
+      demoScanDelaySeconds: 10,
+      dataChatAvailable: false
+    });
     vi.mocked(fetchMode).mockResolvedValue('Demo');
     vi.mocked(fetchSubscriptions).mockResolvedValue(subscriptions);
     vi.mocked(explainRecommendation).mockResolvedValue(undefined);
@@ -123,13 +129,11 @@ describe('demo subscription experience', () => {
     expect(screen.getByRole('option', { name: /Contoso Engineering.*Scheduling/ })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: /Contoso Legacy Estate.*Cleanup/ })).toBeInTheDocument();
     expect(screen.getByText('Demo scenario: Rightsizing')).toBeInTheDocument();
-    expect(runAnalysisScan).toHaveBeenCalledWith('demo-production', 'Demo', true);
+    expect(screen.getByText(/Foundry configured.*gpt-5.4-mini/)).toBeInTheDocument();
+    expect(runAnalysisScan).toHaveBeenCalledWith('demo-production', 'Demo', false);
   });
 
-  it('runs a fresh first-scenario scan instead of restoring a shared demo result', async () => {
-    vi.mocked(fetchLatestAnalysis).mockResolvedValue(
-      createAnalysis('demo-legacy', 'stale-legacy-resource', 'Removal')
-    );
+  it('runs a fresh first-scenario scan without requesting a shared previous result', async () => {
     vi.mocked(runAnalysisScan).mockResolvedValue(
       createAnalysis('demo-production', 'fresh-production-resource', 'Rightsizing')
     );
@@ -137,14 +141,13 @@ describe('demo subscription experience', () => {
     render(<App />);
 
     expect(await screen.findByText('fresh-production-resource')).toBeInTheDocument();
-    expect(screen.queryByText('stale-legacy-resource')).not.toBeInTheDocument();
-    expect(runAnalysisScan).toHaveBeenCalledWith('demo-production', 'Demo', true);
+    expect(runAnalysisScan).toHaveBeenCalledWith('demo-production', 'Demo', false);
   });
 
   it('does not let initialization overwrite a newer switch to live mode', async () => {
-    let resolveLatestAnalysis!: (analysis: AnalysisResult) => void;
-    const latestAnalysis = new Promise<AnalysisResult>((resolve) => {
-      resolveLatestAnalysis = resolve;
+    let resolveMode!: (mode: string) => void;
+    const initialMode = new Promise<string>((resolve) => {
+      resolveMode = resolve;
     });
     const liveSubscription: SubscriptionInfo = {
       subscriptionId: 'live-subscription',
@@ -153,7 +156,7 @@ describe('demo subscription experience', () => {
       isDemo: false
     };
 
-    vi.mocked(fetchLatestAnalysis).mockReturnValue(latestAnalysis);
+    vi.mocked(fetchMode).mockReturnValue(initialMode);
     vi.mocked(fetchSubscriptions).mockImplementation(async (requestedMode) =>
       requestedMode === 'Live' ? [liveSubscription] : subscriptions
     );
@@ -164,12 +167,11 @@ describe('demo subscription experience', () => {
     expect(await screen.findByRole('option', { name: 'Contoso Live' })).toBeInTheDocument();
 
     await act(async () => {
-      resolveLatestAnalysis(createAnalysis('demo-legacy', 'stale-legacy-resource', 'Removal'));
-      await latestAnalysis;
+      resolveMode('Demo');
+      await initialMode;
     });
 
     expect(screen.getByText('Live Azure Tenant (Azure CLI / ARM)')).toBeInTheDocument();
-    expect(screen.queryByText('stale-legacy-resource')).not.toBeInTheDocument();
     expect(runAnalysisScan).not.toHaveBeenCalled();
   });
 
@@ -200,7 +202,7 @@ describe('demo subscription experience', () => {
     });
 
     expect(await screen.findByText('vm-engineering-schedule')).toBeInTheDocument();
-    expect(runAnalysisScan).toHaveBeenLastCalledWith('demo-engineering', 'Demo', true);
+    expect(runAnalysisScan).toHaveBeenLastCalledWith('demo-engineering', 'Demo', false);
   });
 
   it('ignores an older scan response after the user selects a newer demo subscription', async () => {
@@ -241,5 +243,22 @@ describe('demo subscription experience', () => {
 
     expect(screen.getByText('disk-legacy-cleanup')).toBeInTheDocument();
     expect(screen.queryByText('vm-engineering-schedule')).not.toBeInTheDocument();
+  });
+
+  it('opens a current-data chat shell with the active analysis context', async () => {
+    vi.mocked(runAnalysisScan).mockResolvedValue(
+      createAnalysis('demo-production', 'vm-production-rightsize', 'Rightsizing')
+    );
+
+    const user = userEvent.setup();
+    render(<App />);
+    expect(await screen.findByText('vm-production-rightsize')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Chat with advisor' }));
+
+    expect(screen.getByRole('dialog', { name: 'Chat about this data' })).toBeInTheDocument();
+    expect(screen.getByText(/1 recommendations · 1 resources · \$100\.00\/month/)).toBeInTheDocument();
+    expect(screen.getByText('Preview shell')).toBeInTheDocument();
+    expect(screen.getByText(/no conversational API call is made yet/i)).toBeInTheDocument();
   });
 });

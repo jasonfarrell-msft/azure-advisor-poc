@@ -20,6 +20,14 @@ export interface SubscriptionInfo {
   scenarioSummary?: string;
 }
 
+export interface AdvisorCapabilities {
+  foundryConfigured: boolean;
+  foundryDeployment: string;
+  foundryProject: string;
+  demoScanDelaySeconds: number;
+  dataChatAvailable: boolean;
+}
+
 export interface CostBreakdown {
   currentMonthlyCost: number;
   targetMonthlyCost: number;

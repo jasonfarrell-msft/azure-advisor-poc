@@ -17,13 +17,19 @@ public class AiContextExplainer : IAiContextExplainer
     private readonly string _projectName;
     private readonly TokenCredential _credential;
     private readonly AzureOpenAIClient? _client;
-    private readonly bool _isEnabled;
+    private readonly bool _isConfigured;
+
+    public bool IsConfigured => _isConfigured;
+    public string DeploymentName => _deploymentName;
+    public string ProjectName => _projectName;
 
     public AiContextExplainer(string? endpoint = null, string? deploymentName = null, string? projectName = null, TokenCredential? credential = null)
     {
-        _endpoint = endpoint ?? "https://foundry-sandbox-swc-mx01.openai.azure.com/";
-        _deploymentName = deploymentName ?? "gpt-5.4-mini";
-        _projectName = projectName ?? "finops-advisor-project";
+        _endpoint = string.IsNullOrWhiteSpace(endpoint)
+            ? "https://foundry-sandbox-swc-mx01.openai.azure.com/"
+            : endpoint;
+        _deploymentName = string.IsNullOrWhiteSpace(deploymentName) ? "gpt-5.4-mini" : deploymentName;
+        _projectName = string.IsNullOrWhiteSpace(projectName) ? "finops-advisor-project" : projectName;
         _credential = credential ?? new DefaultAzureCredential(new DefaultAzureCredentialOptions
         {
             ExcludeInteractiveBrowserCredential = true
@@ -34,18 +40,18 @@ public class AiContextExplainer : IAiContextExplainer
             if (Uri.TryCreate(_endpoint, UriKind.Absolute, out var uri))
             {
                 _client = new AzureOpenAIClient(uri, _credential);
-                _isEnabled = true;
+                _isConfigured = true;
             }
         }
         catch
         {
-            _isEnabled = false;
+            _isConfigured = false;
         }
     }
 
     public async Task<AiExplanationResult> ExplainRecommendationAsync(RecommendationCard card, CancellationToken ct = default)
     {
-        if (_isEnabled && _client != null)
+        if (_isConfigured && _client != null)
         {
             try
             {

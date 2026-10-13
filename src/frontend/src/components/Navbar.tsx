@@ -12,7 +12,8 @@ interface NavbarProps {
   isScanning: boolean;
   enrichWithAi: boolean;
   onEnrichWithAiChange: (val: boolean) => void;
-  hostedFoundryEnabled: boolean;
+  foundryConfigured: boolean;
+  foundryDeployment?: string;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -25,7 +26,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   isScanning,
   enrichWithAi,
   onEnrichWithAiChange,
-  hostedFoundryEnabled
+  foundryConfigured,
+  foundryDeployment
 }) => {
   return (
     <header className="bg-slate-900 border-b border-slate-800 text-white sticky top-0 z-30 shadow-md">
@@ -49,13 +51,15 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* AI Foundry Status Badge */}
           <div className="hidden lg:flex items-center space-x-2 text-xs bg-slate-800/80 px-3 py-1.5 rounded-lg border border-slate-700/60">
-            {hostedFoundryEnabled ? (
+            {foundryConfigured ? (
               <>
                 <Sparkles className="w-3.5 h-3.5 text-indigo-400 animate-pulse" />
-                <span className="text-slate-400">Local Foundry integration</span>
+                <span className="text-slate-300">
+                  Foundry configured{foundryDeployment ? ` · ${foundryDeployment}` : ''}
+                </span>
               </>
             ) : (
-              <span className="text-slate-300">Hosted Foundry disabled</span>
+              <span className="text-slate-300">Deterministic AI fallback</span>
             )}
           </div>
 

@@ -9,11 +9,12 @@ It combines a deterministic calculation engine with Azure AI Foundry (`gpt-5.4-m
 ## Key Features
 
 1. **Dual-Mode Operation**:
-   - **Demo Mode**: Instant analysis across three synthetic subscriptions, each designed to highlight a different optimization strategy:
+   - **Demo Mode**: Guided analysis across three synthetic subscriptions, each designed to highlight a different optimization strategy:
      - **Contoso Production**: underutilized virtual machines and App Service plans that produce rightsizing recommendations.
      - **Contoso Engineering**: non-production virtual machines that produce automated scheduling recommendations.
      - **Contoso Legacy Estate**: unattached disks, an empty App Service plan, and an unassociated public IP that produce cleanup recommendations.
      - The dashboard labels each subscription with its optimization focus, explains the selected scenario, and automatically clears and refreshes recommendations when a different demo subscription is selected.
+     - Demo scans intentionally take 10 seconds to simulate Azure resource and telemetry discovery.
    - **Live Azure Mode**: Discovers tenant subscriptions accessible to the local user via Azure CLI (`az account list`) and ARM credentials. Ingests assets using Azure Resource Graph and Azure Monitor Metrics.
 
 2. **Deterministic FinOps Engines**:
@@ -27,8 +28,17 @@ It combines a deterministic calculation engine with Azure AI Foundry (`gpt-5.4-m
 
 4. **Azure AI Foundry Enrichment**:
    - Integrates with Azure AI Foundry account `foundry-sandbox-swc-mx01` and project `finops-advisor-project` using `gpt-5.4-mini`.
+   - Uses the Container App's user-assigned managed identity with the least-privilege **Cognitive Services OpenAI User** role; no API keys are stored.
    - Strictly enforces prompt injection defenses: freeform resource names and tags are omitted; only sanitized metrics and financial baselines are passed to the model.
    - Seamless deterministic fallback if AI service is unreachable or rate-limited.
+
+5. **Current-Data Chat Preview**:
+   - A launchable right-side panel carries the active subscription, resource count, recommendation count, and savings context.
+   - The current implementation is an explicit preview shell; it does not submit conversational prompts to a backend chat endpoint yet.
+
+6. **Operator Isolation and Backend Authentication**:
+   - Azure Static Web Apps authentication is enforced on the linked Container App backend and persisted in Bicep.
+   - Advisor mode is client-selected rather than process-global, and server-side recommendation actions resolve against the authenticated operator's latest scan instead of a shared global result.
 
 ---
 

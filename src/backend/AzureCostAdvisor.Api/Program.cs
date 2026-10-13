@@ -25,9 +25,15 @@ builder.Services.AddSingleton<IPortfolioConflictResolver, PortfolioConflictResol
 
 // Azure AI Foundry Configuration
 var foundryConfig = builder.Configuration.GetSection("AzureAiFoundry");
-var endpoint = foundryConfig["Endpoint"] ?? "https://foundry-sandbox-swc-mx01.openai.azure.com/";
-var deployment = foundryConfig["DeploymentName"] ?? "gpt-5.4-mini";
-var project = foundryConfig["ProjectName"] ?? "finops-advisor-project";
+var endpoint = string.IsNullOrWhiteSpace(foundryConfig["Endpoint"])
+    ? "https://foundry-sandbox-swc-mx01.openai.azure.com/"
+    : foundryConfig["Endpoint"];
+var deployment = string.IsNullOrWhiteSpace(foundryConfig["DeploymentName"])
+    ? "gpt-5.4-mini"
+    : foundryConfig["DeploymentName"];
+var project = string.IsNullOrWhiteSpace(foundryConfig["ProjectName"])
+    ? "finops-advisor-project"
+    : foundryConfig["ProjectName"];
 
 builder.Services.AddSingleton<IAiContextExplainer>(sp =>
     new AiContextExplainer(endpoint, deployment, project));
@@ -63,20 +69,29 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
-// Global active mode state (default to Demo mode for seamless zero-credential first run)
-var currentMode = AdvisorMode.Demo;
-
 // Endpoints
 
 // 1. Mode Switcher
-app.MapGet("/api/settings/mode", () => Results.Ok(new { mode = currentMode.ToString() }));
+app.MapGet("/api/settings/mode", () => Results.Ok(new { mode = AdvisorMode.Demo.ToString() }));
+
+app.MapGet("/api/settings/capabilities", (IAiContextExplainer aiExplainer) => Results.Ok(new
+{
+    foundryConfigured = aiExplainer.IsConfigured,
+    foundryDeployment = aiExplainer.DeploymentName,
+    foundryProject = aiExplainer.ProjectName,
+    demoScanDelaySeconds = (int)SyntheticDemoDataProvider.SimulatedScanDuration.TotalSeconds,
+    dataChatAvailable = false
+}));
 
 app.MapPost("/api/settings/mode", ([FromBody] ModeRequest request) =>
 {
     if (Enum.TryParse<AdvisorMode>(request.Mode, true, out var parsed))
     {
-        currentMode = parsed;
-        return Results.Ok(new { mode = currentMode.ToString(), message = $"Advisor mode switched to {currentMode}" });
+        return Results.Ok(new
+        {
+            mode = parsed.ToString(),
+            message = $"Advisor mode set to {parsed} for this client."
+        });
     }
     return Results.BadRequest(new { error = "Invalid mode. Allowed values: Live, Demo" });
 });
@@ -88,7 +103,7 @@ app.MapGet("/api/subscriptions", async (
     LiveAzureDataProvider liveProvider,
     CancellationToken ct) =>
 {
-    var effectiveMode = currentMode;
+    var effectiveMode = AdvisorMode.Demo;
     if (!string.IsNullOrEmpty(mode) && Enum.TryParse<AdvisorMode>(mode, true, out var queryMode))
     {
         effectiveMode = queryMode;
@@ -122,9 +137,10 @@ app.MapPost("/api/analysis/scan", async (
     CostAdvisorOrchestrator orchestrator,
     SyntheticDemoDataProvider demoProvider,
     LiveAzureDataProvider liveProvider,
+    HttpContext context,
     CancellationToken ct) =>
 {
-    var mode = currentMode;
+    var mode = AdvisorMode.Demo;
     if (!string.IsNullOrEmpty(request.Mode) && Enum.TryParse<AdvisorMode>(request.Mode, true, out var reqMode))
     {
         mode = reqMode;
@@ -134,10 +150,16 @@ app.MapPost("/api/analysis/scan", async (
 
     try
     {
+        if (mode == AdvisorMode.Demo)
+        {
+            await demoProvider.SimulateScanAsync(ct);
+        }
+
         var result = await orchestrator.RunAnalysisAsync(
             provider,
             request.SubscriptionId,
             enrichWithAi: request.EnrichWithAi,
+            analysisScope: GetAnalysisScope(context),
             ct: ct);
 
         return Results.Ok(result);
@@ -151,10 +173,10 @@ app.MapPost("/api/analysis/scan", async (
     }
 });
 
-// 4. Get Latest Analysis Result
-app.MapGet("/api/analysis/latest", (CostAdvisorOrchestrator orchestrator) =>
+// 4. Get Latest Analysis Result for the authenticated operator
+app.MapGet("/api/analysis/latest", (CostAdvisorOrchestrator orchestrator, HttpContext context) =>
 {
-    var latest = orchestrator.GetLatestAnalysis();
+    var latest = orchestrator.GetLatestAnalysis(GetAnalysisScope(context));
     return latest != null ? Results.Ok(latest) : Results.NotFound(new { message = "No analysis has been run yet." });
 });
 
@@ -162,9 +184,10 @@ app.MapGet("/api/analysis/latest", (CostAdvisorOrchestrator orchestrator) =>
 app.MapPost("/api/recommendations/{id}/explain", async (
     string id,
     CostAdvisorOrchestrator orchestrator,
+    HttpContext context,
     CancellationToken ct) =>
 {
-    var latest = orchestrator.GetLatestAnalysis();
+    var latest = orchestrator.GetLatestAnalysis(GetAnalysisScope(context));
     if (latest == null)
     {
         return Results.NotFound(new { error = "No analysis results found" });
@@ -183,9 +206,10 @@ app.MapPost("/api/recommendations/{id}/explain", async (
 // 6. Recalculate Custom Schedule Savings
 app.MapPost("/api/schedules/calculate", (
     [FromBody] ScheduleCalculationRequest request,
-    CostAdvisorOrchestrator orchestrator) =>
+    CostAdvisorOrchestrator orchestrator,
+    HttpContext context) =>
 {
-    var latest = orchestrator.GetLatestAnalysis();
+    var latest = orchestrator.GetLatestAnalysis(GetAnalysisScope(context));
     if (latest == null)
     {
         return Results.NotFound(new { error = "No active analysis result found" });
@@ -207,6 +231,23 @@ app.MapPost("/api/schedules/calculate", (
 });
 
 app.Run();
+
+static string GetAnalysisScope(HttpContext context)
+{
+    var staticWebAppPrincipalId = context.Request.Headers["X-MS-CLIENT-PRINCIPAL-ID"].FirstOrDefault();
+    if (!string.IsNullOrWhiteSpace(staticWebAppPrincipalId))
+    {
+        return staticWebAppPrincipalId;
+    }
+
+    var authenticatedPrincipalId = context.User.Claims
+        .FirstOrDefault(claim => claim.Type is "sub" or "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier")
+        ?.Value;
+
+    return string.IsNullOrWhiteSpace(authenticatedPrincipalId)
+        ? "local-development"
+        : authenticatedPrincipalId;
+}
 
 public record ModeRequest(string Mode);
 public record ScanRequest(string SubscriptionId, string? Mode = null, bool EnrichWithAi = true);

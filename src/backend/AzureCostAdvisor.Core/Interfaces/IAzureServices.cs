@@ -33,6 +33,9 @@ public interface IPortfolioConflictResolver
 
 public interface IAiContextExplainer
 {
+    bool IsConfigured { get; }
+    string DeploymentName { get; }
+    string ProjectName { get; }
     Task<AiExplanationResult> ExplainRecommendationAsync(RecommendationCard card, CancellationToken ct = default);
     Task<IReadOnlyList<RecommendationCard>> EnrichRecommendationsAsync(IReadOnlyList<RecommendationCard> cards, CancellationToken ct = default);
 }

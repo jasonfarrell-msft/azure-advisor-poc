@@ -75,6 +75,15 @@ param backendContainerPort int = 8080
 @description('Static Web App HTTPS origin used in backend CORS configuration. Leave empty to derive from Static Web App default hostname.')
 param allowedFrontendOrigin string = ''
 
+@description('Azure AI Foundry account endpoint used for recommendation enrichment.')
+param foundryEndpoint string = 'https://foundry-sandbox-swc-mx01.openai.azure.com/'
+
+@description('Resource group containing the existing Azure AI Foundry account.')
+param foundryResourceGroupName string = 'rg-client-sandbox-eus2-mx01'
+
+@description('Existing Azure AI Foundry account name.')
+param foundryAccountName string = 'foundry-sandbox-swc-mx01'
+
 @description('Controls Reader role assignment at subscription scope. Keep false until the SWA auth routes and operator role are deployed and verified.')
 param enableSubscriptionReaderAssignment bool = false
 
@@ -105,6 +114,10 @@ resource swaResourceGroup 'Microsoft.Resources/resourceGroups@2023-07-01' existi
 resource existingStaticWebApp 'Microsoft.Web/staticSites@2025-05-01' existing = {
   name: swaName
   scope: swaResourceGroup
+}
+
+resource foundryResourceGroup 'Microsoft.Resources/resourceGroups@2023-07-01' existing = {
+  name: foundryResourceGroupName
 }
 
 module network 'modules/network.bicep' = {
@@ -195,6 +208,8 @@ module containerApp 'modules/container-app.bicep' = {
     memory: backendMemory
     containerPort: backendContainerPort
     healthProbePath: '/api/settings/mode'
+    foundryEndpoint: foundryEndpoint
+    staticWebAppClientId: existingStaticWebApp.properties.defaultHostname
     corsAllowedOrigin: empty(allowedFrontendOrigin)
       ? 'https://${existingStaticWebApp.properties.defaultHostname}'
       : allowedFrontendOrigin
@@ -220,6 +235,15 @@ module roleAssignments 'modules/role-assignments.bicep' = {
   ]
   params: {
     acrName: acrName
+    managedIdentityPrincipalId: identity.outputs.principalId
+  }
+}
+
+module foundryRoleAssignment 'modules/foundry-role-assignment.bicep' = {
+  name: 'foundryRoleAssignment'
+  scope: foundryResourceGroup
+  params: {
+    foundryAccountName: foundryAccountName
     managedIdentityPrincipalId: identity.outputs.principalId
   }
 }

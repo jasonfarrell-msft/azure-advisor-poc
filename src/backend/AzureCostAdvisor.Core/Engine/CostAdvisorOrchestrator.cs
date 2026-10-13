@@ -10,7 +10,7 @@ public class CostAdvisorOrchestrator
     private readonly IPortfolioConflictResolver _conflictResolver;
     private readonly IRetailPricesClient _pricesClient;
     private readonly IAiContextExplainer _aiExplainer;
-    private readonly ConcurrentDictionary<string, AnalysisResult> _analysisCache = new();
+    private readonly ConcurrentDictionary<string, AnalysisResult> _latestAnalysisByScope = new();
 
     public CostAdvisorOrchestrator(
         IEnumerable<IFinOpsDetector> detectors,
@@ -28,6 +28,7 @@ public class CostAdvisorOrchestrator
         IAzureDataProvider dataProvider,
         string subscriptionId,
         bool enrichWithAi = true,
+        string analysisScope = "local-development",
         CancellationToken ct = default)
     {
         var startedAt = DateTime.UtcNow;
@@ -90,15 +91,14 @@ public class CostAdvisorOrchestrator
             RiskCounts = riskCounts
         };
 
-        _analysisCache[jobId] = result;
-        _analysisCache["latest"] = result;
+        _latestAnalysisByScope[analysisScope] = result;
 
         return result;
     }
 
-    public AnalysisResult? GetLatestAnalysis()
+    public AnalysisResult? GetLatestAnalysis(string analysisScope = "local-development")
     {
-        return _analysisCache.TryGetValue("latest", out var res) ? res : null;
+        return _latestAnalysisByScope.TryGetValue(analysisScope, out var result) ? result : null;
     }
 
     public async Task<AiExplanationResult> ExplainRecommendationAsync(RecommendationCard card, CancellationToken ct = default)

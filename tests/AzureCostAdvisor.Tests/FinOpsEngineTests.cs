@@ -315,6 +315,28 @@ public class FinOpsEngineTests
     }
 
     [Fact]
+    public async Task CostAdvisorOrchestrator_IsolatesLatestAnalysisByOperatorScope()
+    {
+        var demoProvider = new SyntheticDemoDataProvider();
+        var orchestrator = CreateOrchestrator();
+
+        var production = await orchestrator.RunAnalysisAsync(
+            demoProvider,
+            SyntheticDemoDataProvider.ProductionSubscriptionId,
+            enrichWithAi: false,
+            analysisScope: "operator-production");
+        var engineering = await orchestrator.RunAnalysisAsync(
+            demoProvider,
+            SyntheticDemoDataProvider.EngineeringSubscriptionId,
+            enrichWithAi: false,
+            analysisScope: "operator-engineering");
+
+        Assert.Same(production, orchestrator.GetLatestAnalysis("operator-production"));
+        Assert.Same(engineering, orchestrator.GetLatestAnalysis("operator-engineering"));
+        Assert.Null(orchestrator.GetLatestAnalysis("operator-without-scan"));
+    }
+
+    [Fact]
     public async Task SyntheticDemoDataProvider_OffersThreeSubscriptions_WithDistinctRecommendationScenarios()
     {
         var demoProvider = new SyntheticDemoDataProvider();
@@ -326,6 +348,7 @@ public class FinOpsEngineTests
         Assert.All(subscriptions, subscription => Assert.False(string.IsNullOrWhiteSpace(subscription.OptimizationFocus)));
         Assert.All(subscriptions, subscription => Assert.False(string.IsNullOrWhiteSpace(subscription.ScenarioSummary)));
         Assert.Equal(3, subscriptions.Select(subscription => subscription.OptimizationFocus).Distinct().Count());
+        Assert.Equal(TimeSpan.FromSeconds(10), SyntheticDemoDataProvider.SimulatedScanDuration);
 
         var expectedRecommendations = new Dictionary<string, (RecommendationCategory Category, string[] ResourceNames)>
         {

@@ -1,12 +1,25 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { AdvisorMode, SubscriptionInfo, AnalysisResult, RecommendationCard } from './types';
-import { fetchMode, fetchSubscriptions, runAnalysisScan, fetchLatestAnalysis, explainRecommendation } from './api';
+import {
+  AdvisorCapabilities,
+  AdvisorMode,
+  SubscriptionInfo,
+  AnalysisResult,
+  RecommendationCard
+} from './types';
+import {
+  fetchCapabilities,
+  fetchMode,
+  fetchSubscriptions,
+  runAnalysisScan,
+  explainRecommendation
+} from './api';
 import { Navbar } from './components/Navbar';
 import { KpiSummary } from './components/KpiSummary';
 import { RecommendationTable } from './components/RecommendationTable';
 import { RecommendationDetailModal } from './components/RecommendationDetailModal';
 import { SchedulePlannerModal } from './components/SchedulePlannerModal';
-import { Lightbulb, ShieldAlert, Sparkles } from 'lucide-react';
+import { DataChatPanel } from './components/DataChatPanel';
+import { Lightbulb, MessageSquareText, ShieldAlert, Sparkles } from 'lucide-react';
 
 export const App: React.FC = () => {
   const [mode, setMode] = useState<AdvisorMode>('Demo');
@@ -14,9 +27,17 @@ export const App: React.FC = () => {
   const [selectedSubId, setSelectedSubId] = useState<string>('');
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
   const [isScanning, setIsScanning] = useState<boolean>(false);
-  const [enrichWithAi, setEnrichWithAi] = useState<boolean>(() => !import.meta.env.PROD);
+  const [enrichWithAi, setEnrichWithAi] = useState<boolean>(false);
+  const [capabilities, setCapabilities] = useState<AdvisorCapabilities>({
+    foundryConfigured: false,
+    foundryDeployment: '',
+    foundryProject: '',
+    demoScanDelaySeconds: 10,
+    dataChatAvailable: false
+  });
   const [selectedRec, setSelectedRec] = useState<RecommendationCard | null>(null);
   const [scheduleRec, setScheduleRec] = useState<RecommendationCard | null>(null);
+  const [isChatOpen, setIsChatOpen] = useState(false);
   const [isExplaining, setIsExplaining] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const scanSequence = useRef(0);
@@ -83,19 +104,15 @@ export const App: React.FC = () => {
       const requestSequence = ++selectionSequence.current;
 
       try {
-        const latest = await fetchLatestAnalysis().catch(() => null);
+        const [currentMode, advisorCapabilities] = await Promise.all([
+          fetchMode().catch(() => 'Demo'),
+          fetchCapabilities().catch(() => null)
+        ]);
         if (requestSequence !== selectionSequence.current) return;
 
-        if (latest && latest.mode === 0) {
-          const latestMode: AdvisorMode = latest.mode === 0 ? 'Live' : 'Demo';
-          setAnalysis(latest);
-          setMode(latestMode);
-          await loadSubscriptions(latestMode, requestSequence, latest.subscriptionId);
-          return;
+        if (advisorCapabilities) {
+          setCapabilities(advisorCapabilities);
         }
-
-        const currentMode = latest ? 'Demo' : await fetchMode().catch(() => 'Demo');
-        if (requestSequence !== selectionSequence.current) return;
 
         const parsedMode: AdvisorMode = currentMode === 'Live' ? 'Live' : 'Demo';
         setMode(parsedMode);
@@ -204,7 +221,8 @@ export const App: React.FC = () => {
         isScanning={isScanning}
         enrichWithAi={enrichWithAi}
         onEnrichWithAiChange={setEnrichWithAi}
-        hostedFoundryEnabled={!import.meta.env.PROD}
+        foundryConfigured={capabilities.foundryConfigured}
+        foundryDeployment={capabilities.foundryDeployment}
       />
 
       {/* Main Container */}
@@ -213,7 +231,7 @@ export const App: React.FC = () => {
           role="status"
           className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900"
         >
-          <strong>Pilot limitation:</strong> This deployment has one shared in-memory session. Mode and latest analysis are shared across operator tabs and reset when the API restarts.
+          <strong>Pilot note:</strong> Scan results stay in this browser session. Server-side recommendation actions are isolated by authenticated operator and reset when the API restarts.
         </div>
 
         {mode === 'Demo' && selectedSubscription && (
@@ -231,7 +249,7 @@ export const App: React.FC = () => {
                   {selectedSubscription.scenarioSummary}
                 </p>
                 <p className="mt-2 text-xs font-medium text-indigo-700">
-                  Selecting a demo subscription automatically clears the previous scan and loads this portfolio.
+                  Selecting a demo subscription clears the previous results and runs a simulated {capabilities.demoScanDelaySeconds}-second discovery scan.
                 </p>
               </div>
             </div>
@@ -271,13 +289,13 @@ export const App: React.FC = () => {
             <span>•</span>
             <span>Deterministic FinOps Engine</span>
             <span>•</span>
-            {import.meta.env.PROD ? (
-              <span className="font-medium text-slate-600">Hosted Foundry disabled; deterministic explanations</span>
-            ) : (
+            {capabilities.foundryConfigured ? (
               <span className="flex items-center text-indigo-600 font-medium">
                 <Sparkles className="w-3.5 h-3.5 mr-1" />
-                Local Foundry integration
+                Azure AI Foundry enrichment configured
               </span>
+            ) : (
+              <span className="font-medium text-slate-600">Deterministic explanations available</span>
             )}
           </div>
         </div>
@@ -319,10 +337,27 @@ export const App: React.FC = () => {
         onClose={() => setScheduleRec(null)}
       />
 
+      <button
+        type="button"
+        onClick={() => setIsChatOpen(true)}
+        className="fixed bottom-6 right-6 z-40 flex items-center gap-2 rounded-full bg-indigo-600 px-4 py-3 text-sm font-bold text-white shadow-xl shadow-indigo-600/25 transition hover:bg-indigo-500"
+      >
+        <MessageSquareText className="h-5 w-5" />
+        Chat with advisor
+      </button>
+
+      <DataChatPanel
+        isOpen={isChatOpen}
+        onClose={() => setIsChatOpen(false)}
+        analysis={analysis}
+        subscription={selectedSubscription}
+        foundryConfigured={capabilities.foundryConfigured}
+      />
+
       {/* Footer */}
       <footer className="border-t border-slate-200 bg-white py-4 mt-auto">
         <div className="max-w-7xl mx-auto px-4 text-center text-xs text-slate-400">
-          Azure Cost Advisor &copy; 2026 • {import.meta.env.PROD ? 'Hosted Foundry disabled in this Central US pilot' : 'Local Foundry integration may be enabled'} • No credentials stored by the app
+          Azure Cost Advisor &copy; 2026 • {capabilities.foundryConfigured ? `Azure AI Foundry ${capabilities.foundryDeployment} configured` : 'Deterministic AI fallback'} • No credentials stored by the app
         </div>
       </footer>
     </div>

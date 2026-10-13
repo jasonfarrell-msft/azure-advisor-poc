@@ -11,6 +11,8 @@ param memory string = '1Gi'
 param containerPort int = 8080
 param healthProbePath string = '/api/settings/mode'
 param corsAllowedOrigin string
+param foundryEndpoint string
+param staticWebAppClientId string
 
 var isPlaceholder = containerImage == 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
 var effectivePort = isPlaceholder ? 80 : containerPort
@@ -76,8 +78,7 @@ resource containerApp 'Microsoft.App/containerApps@2026-07-01' = {
             }
             {
               name: 'AzureAiFoundry__Endpoint'
-              // Hosted Foundry is disabled because the configured instance is outside Central US.
-              value: ''
+              value: foundryEndpoint
             }
           ]
           probes: [
@@ -118,6 +119,27 @@ resource containerApp 'Microsoft.App/containerApps@2026-07-01' = {
         minReplicas: 1
         maxReplicas: 1
       }
+    }
+  }
+}
+
+resource authConfig 'Microsoft.App/containerApps/authConfigs@2026-07-01' = {
+  parent: containerApp
+  name: 'current'
+  properties: {
+    globalValidation: {
+      unauthenticatedClientAction: 'RedirectToLoginPage'
+    }
+    identityProviders: {
+      azureStaticWebApps: {
+        enabled: true
+        registration: {
+          clientId: staticWebAppClientId
+        }
+      }
+    }
+    platform: {
+      enabled: true
     }
   }
 }

@@ -1,6 +1,6 @@
 # Azure Deployment Preflight Report
 
-**Generated:** 2026-10-13T11:38:00Z  
+**Generated:** 2026-10-13T08:55:00Z
 **Status:** Pass with warnings
 
 ---
@@ -21,7 +21,7 @@
 | Check | Status | Details |
 |-------|--------|---------|
 | Bicep Syntax | Pass with warnings | Template compiled successfully; Bicep emitted type-availability warnings for newer resource API versions. |
-| What-If Analysis | Pass with warnings | Completed without predicted creates, deletes, or explicit property modifications; 12 resources were marked Deploy, 3 Ignore, and 1 role assignment was unsupported for analysis. |
+| What-If Analysis | Pass with warnings | Completed without predicted creates, deletes, or explicit property modifications; 13 resources were marked Deploy, 3 Ignore, and 2 role assignments were unsupported for analysis. |
 | Permission Check | Pass | Provider-level validation completed with the authenticated Azure CLI identity. |
 
 ---
@@ -34,7 +34,6 @@
 |------|---------|--------|
 | 1 | `az bicep build --file infra/main.bicep --stdout` | Compiled successfully with BCP081 warnings |
 | 2 | `az deployment sub what-if --location eastus2 --template-file infra/main.bicep --parameters @infra/main.parameters.json --validation-level Provider --result-format ResourceIdOnly` | Completed with deploy/ignore/unsupported predictions |
-| 3 | Local .NET 10 runtime-container health check | `GET /api/settings/mode` returned `{"mode":"Demo"}` |
 
 ### Tool Versions
 
@@ -54,13 +53,13 @@
 #### Bicep type metadata unavailable for newer API versions
 
 - **Source:** Bicep build
-- **Message:** BCP081 was emitted for the `2025-05-01`, `2026-05-01`, and `2026-07-01` resource API versions because Bicep 0.47.16 does not include their type metadata.
+- **Message:** BCP081 was emitted for the `2025-05-01`, `2026-05-01`, and `2026-07-01` resource API versions, including Container Apps auth configuration, because Bicep 0.47.16 does not include their type metadata.
 - **Recommendation:** Upgrade the Bicep CLI and rerun validation when a release containing these schemas is available. Azure provider validation accepted the template.
 
 #### Some existing resources cannot be fully predicted
 
 - **Source:** What-if
-- **Message:** Existing resources were marked Deploy or Ignore, and the ACR pull role assignment was unsupported because its generated resource ID depends on deployment-time identity output.
+- **Message:** Existing resources were marked Deploy or Ignore. The ACR pull and Azure AI Foundry inference role assignments were unsupported because their generated resource IDs depend on deployment-time identity output.
 - **Recommendation:** Continue using code-only deployments for application updates. Review a full property-level what-if before any infrastructure change.
 
 ---
@@ -74,11 +73,11 @@
 | Create | 0 |
 | Modify | 0 explicitly predicted |
 | Delete | 0 |
-| Deploy (change unknown) | 12 |
+| Deploy (change unknown) | 13 |
 | Ignore | 3 |
-| Unsupported | 1 |
+| Unsupported | 2 |
 
-No resources were predicted for deletion. This deployment updated application code only and did not execute the Bicep template.
+No resources were predicted for deletion. The predicted deployments include the existing Container App, its `authConfigs/current` child resource, the Static Web App linked backend, and the least-privilege Foundry role assignment.
 
 ---
 
@@ -86,17 +85,16 @@ No resources were predicted for deletion. This deployment updated application co
 
 1. Keep `infra/main.parameters.json` pinned to the deployed ACR image digest.
 2. Use immutable image digests for Container Apps revisions instead of mutable tags.
-3. Preserve the Static Web App authentication rules and linked backend configuration when updating frontend assets.
+3. Keep Container Apps Easy Auth enabled with the Azure Static Web Apps provider so the public backend hostname cannot bypass frontend authorization.
 4. Upgrade Bicep before making future infrastructure changes so the latest resource API versions receive local type validation.
 
 ---
 
 ## Next Steps
 
-Application deployment completed after this preflight:
-
-- Backend image built in Azure Container Registry and deployed to Container Apps revision `ca-azure-advisor-dev-46b2-eus2--56ebca0`.
-- Frontend bundle deployed to the production Static Web App environment.
+1. Build and deploy the reviewed backend image by immutable digest.
+2. Apply the validated Bicep changes to persist Easy Auth and the Foundry managed-identity role.
+3. Deploy the reviewed frontend bundle and verify the authenticated Static Web App route, direct backend rejection, ten-second scan, Foundry capability, and chat preview.
 
 ---
 
