@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { AdvisorMode, SubscriptionInfo, AnalysisResult, RecommendationCard } from './types';
 import { fetchMode, fetchSubscriptions, runAnalysisScan, fetchLatestAnalysis, explainRecommendation } from './api';
 import { Navbar } from './components/Navbar';
@@ -6,7 +6,7 @@ import { KpiSummary } from './components/KpiSummary';
 import { RecommendationTable } from './components/RecommendationTable';
 import { RecommendationDetailModal } from './components/RecommendationDetailModal';
 import { SchedulePlannerModal } from './components/SchedulePlannerModal';
-import { ShieldAlert, Sparkles } from 'lucide-react';
+import { Lightbulb, ShieldAlert, Sparkles } from 'lucide-react';
 
 export const App: React.FC = () => {
   const [mode, setMode] = useState<AdvisorMode>('Demo');
@@ -19,86 +19,173 @@ export const App: React.FC = () => {
   const [scheduleRec, setScheduleRec] = useState<RecommendationCard | null>(null);
   const [isExplaining, setIsExplaining] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const scanSequence = useRef(0);
+  const selectionSequence = useRef(0);
+  const initialized = useRef(false);
 
-  // Initialize mode and subscriptions
-  const loadSubscriptions = useCallback(async (currentM: AdvisorMode) => {
-    try {
-      setErrorMessage(null);
-      const subs = await fetchSubscriptions(currentM);
-      setSubscriptions(subs);
-      if (subs.length > 0) {
-        setSelectedSubId(subs[0].subscriptionId);
-      } else {
-        setSelectedSubId('');
-      }
-    } catch (err: any) {
-      setErrorMessage(err.message || 'Failed to load subscriptions');
-    }
+  const selectedSubscription = useMemo(
+    () => subscriptions.find((subscription) => subscription.subscriptionId === selectedSubId) ?? null,
+    [selectedSubId, subscriptions]
+  );
+
+  const loadSubscriptions = useCallback(async (
+    currentMode: AdvisorMode,
+    requestSequence: number,
+    preferredSubscriptionId?: string
+  ): Promise<string> => {
+    const subs = await fetchSubscriptions(currentMode);
+    if (requestSequence !== selectionSequence.current) return '';
+
+    setSubscriptions(subs);
+
+    const selectedId = subs.some((subscription) => subscription.subscriptionId === preferredSubscriptionId)
+      ? preferredSubscriptionId!
+      : subs[0]?.subscriptionId ?? '';
+
+    setSelectedSubId(selectedId);
+    return selectedId;
   }, []);
 
-  useEffect(() => {
-    const initialize = async () => {
-      const latest = await fetchLatestAnalysis().catch(() => null);
-      if (latest) {
-        const latestMode: AdvisorMode = latest.mode === 0 ? 'Live' : 'Demo';
-        setAnalysis(latest);
-        setMode(latestMode);
-        await loadSubscriptions(latestMode);
-        return;
-      }
+  const scanSubscription = useCallback(async (
+    subscriptionId: string,
+    scanMode: AdvisorMode
+  ) => {
+    if (!subscriptionId) return;
 
-      const currentMode = await fetchMode().catch(() => 'Demo');
-      const parsedMode: AdvisorMode = currentMode === 'Live' ? 'Live' : 'Demo';
-      setMode(parsedMode);
-      await loadSubscriptions(parsedMode);
-    };
-
-    void initialize();
-  }, [loadSubscriptions]);
-
-  // Mode change handler
-  const handleModeChange = async (newMode: AdvisorMode) => {
-    setMode(newMode);
-    try {
-      await loadSubscriptions(newMode);
-    } catch (err: any) {
-      setErrorMessage(err.message || 'Failed to switch mode');
-    }
-  };
-
-  // Run scan handler
-  const handleRunScan = async () => {
-    if (!selectedSubId) return;
+    const requestSequence = ++scanSequence.current;
+    setAnalysis(null);
+    setSelectedRec(null);
+    setScheduleRec(null);
     setIsScanning(true);
     setErrorMessage(null);
 
     try {
-      const res = await runAnalysisScan(selectedSubId, mode, enrichWithAi);
-      setAnalysis(res);
-    } catch (err: any) {
-      setErrorMessage(err.message || 'Analysis scan failed');
+      const result = await runAnalysisScan(subscriptionId, scanMode, enrichWithAi);
+      if (requestSequence === scanSequence.current) {
+        setAnalysis(result);
+      }
+    } catch (err: unknown) {
+      if (requestSequence === scanSequence.current) {
+        setErrorMessage(err instanceof Error ? err.message : 'Analysis scan failed');
+      }
     } finally {
+      if (requestSequence === scanSequence.current) {
+        setIsScanning(false);
+      }
+    }
+  }, [enrichWithAi]);
+
+  useEffect(() => {
+    if (initialized.current) return;
+    initialized.current = true;
+
+    const initialize = async () => {
+      const requestSequence = ++selectionSequence.current;
+
+      try {
+        const latest = await fetchLatestAnalysis().catch(() => null);
+        if (requestSequence !== selectionSequence.current) return;
+
+        if (latest && latest.mode === 0) {
+          const latestMode: AdvisorMode = latest.mode === 0 ? 'Live' : 'Demo';
+          setAnalysis(latest);
+          setMode(latestMode);
+          await loadSubscriptions(latestMode, requestSequence, latest.subscriptionId);
+          return;
+        }
+
+        const currentMode = latest ? 'Demo' : await fetchMode().catch(() => 'Demo');
+        if (requestSequence !== selectionSequence.current) return;
+
+        const parsedMode: AdvisorMode = currentMode === 'Live' ? 'Live' : 'Demo';
+        setMode(parsedMode);
+        const subscriptionId = await loadSubscriptions(parsedMode, requestSequence);
+        if (requestSequence === selectionSequence.current && parsedMode === 'Demo') {
+          await scanSubscription(subscriptionId, parsedMode);
+        }
+      } catch (err: unknown) {
+        if (requestSequence === selectionSequence.current) {
+          setErrorMessage(err instanceof Error ? err.message : 'Failed to initialize the advisor');
+        }
+      }
+    };
+
+    void initialize();
+  }, [loadSubscriptions, scanSubscription]);
+
+  const handleModeChange = async (newMode: AdvisorMode) => {
+    if (newMode === mode) return;
+
+    const requestSequence = ++selectionSequence.current;
+    scanSequence.current += 1;
+    setMode(newMode);
+    setAnalysis(null);
+    setSelectedRec(null);
+    setScheduleRec(null);
+    setIsScanning(false);
+    setErrorMessage(null);
+
+    try {
+      const subscriptionId = await loadSubscriptions(newMode, requestSequence);
+      if (requestSequence === selectionSequence.current && newMode === 'Demo') {
+        await scanSubscription(subscriptionId, newMode);
+      }
+    } catch (err: unknown) {
+      if (requestSequence === selectionSequence.current) {
+        setErrorMessage(err instanceof Error ? err.message : 'Failed to switch mode');
+      }
+    }
+  };
+
+  const handleSubscriptionChange = (subscriptionId: string) => {
+    selectionSequence.current += 1;
+    setSelectedSubId(subscriptionId);
+    if (mode === 'Demo') {
+      void scanSubscription(subscriptionId, mode);
+    } else {
+      scanSequence.current += 1;
+      setAnalysis(null);
+      setSelectedRec(null);
+      setScheduleRec(null);
       setIsScanning(false);
     }
   };
 
+  const handleRunScan = () => {
+    void scanSubscription(selectedSubId, mode);
+  };
+
   // Explain on demand
   const handleExplainOnDemand = async (id: string) => {
+    if (!analysis) return;
+
+    const analysisJobId = analysis.jobId;
     setIsExplaining(true);
     try {
       const explanation = await explainRecommendation(id);
-      if (explanation && analysis) {
-        const updatedRecs = analysis.recommendations.map((r) =>
-          r.id === id ? { ...r, aiExplanation: explanation } : r
+      if (explanation) {
+        setAnalysis((currentAnalysis) => {
+          if (!currentAnalysis || currentAnalysis.jobId !== analysisJobId) {
+            return currentAnalysis;
+          }
+
+          return {
+            ...currentAnalysis,
+            recommendations: currentAnalysis.recommendations.map((recommendation) =>
+              recommendation.id === id
+                ? { ...recommendation, aiExplanation: explanation }
+                : recommendation
+            )
+          };
+        });
+        setSelectedRec((currentRecommendation) =>
+          currentRecommendation?.id === id
+            ? { ...currentRecommendation, aiExplanation: explanation }
+            : currentRecommendation
         );
-        const updatedAnalysis = { ...analysis, recommendations: updatedRecs };
-        setAnalysis(updatedAnalysis);
-        if (selectedRec && selectedRec.id === id) {
-          setSelectedRec({ ...selectedRec, aiExplanation: explanation });
-        }
       }
-    } catch (err: any) {
-      setErrorMessage(err.message || 'Failed to generate AI explanation');
+    } catch (err: unknown) {
+      setErrorMessage(err instanceof Error ? err.message : 'Failed to generate AI explanation');
     } finally {
       setIsExplaining(false);
     }
@@ -112,7 +199,7 @@ export const App: React.FC = () => {
         onModeChange={handleModeChange}
         subscriptions={subscriptions}
         selectedSubscriptionId={selectedSubId}
-        onSubscriptionChange={setSelectedSubId}
+        onSubscriptionChange={handleSubscriptionChange}
         onRunScan={handleRunScan}
         isScanning={isScanning}
         enrichWithAi={enrichWithAi}
@@ -128,6 +215,28 @@ export const App: React.FC = () => {
         >
           <strong>Pilot limitation:</strong> This deployment has one shared in-memory session. Mode and latest analysis are shared across operator tabs and reset when the API restarts.
         </div>
+
+        {mode === 'Demo' && selectedSubscription && (
+          <section
+            aria-live="polite"
+            className="rounded-xl border border-indigo-200 bg-indigo-50 p-4 text-sm text-indigo-950 shadow-sm"
+          >
+            <div className="flex items-start gap-3">
+              <Lightbulb className="mt-0.5 h-5 w-5 shrink-0 text-indigo-600" />
+              <div>
+                <p className="font-bold">
+                  Demo scenario: {selectedSubscription.optimizationFocus ?? selectedSubscription.displayName}
+                </p>
+                <p className="mt-1 text-xs leading-5 text-indigo-800">
+                  {selectedSubscription.scenarioSummary}
+                </p>
+                <p className="mt-2 text-xs font-medium text-indigo-700">
+                  Selecting a demo subscription automatically clears the previous scan and loads this portfolio.
+                </p>
+              </div>
+            </div>
+          </section>
+        )}
 
         {/* Error Notification Alert */}
         {errorMessage && (

@@ -323,6 +323,9 @@ public class FinOpsEngineTests
 
         Assert.Equal(3, subscriptions.Count);
         Assert.All(subscriptions, subscription => Assert.True(subscription.IsDemo));
+        Assert.All(subscriptions, subscription => Assert.False(string.IsNullOrWhiteSpace(subscription.OptimizationFocus)));
+        Assert.All(subscriptions, subscription => Assert.False(string.IsNullOrWhiteSpace(subscription.ScenarioSummary)));
+        Assert.Equal(3, subscriptions.Select(subscription => subscription.OptimizationFocus).Distinct().Count());
 
         var expectedRecommendations = new Dictionary<string, (RecommendationCategory Category, string[] ResourceNames)>
         {

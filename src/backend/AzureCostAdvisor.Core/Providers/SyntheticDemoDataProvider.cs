@@ -16,26 +16,32 @@ public class SyntheticDemoDataProvider : IAzureDataProvider
         new()
         {
             SubscriptionId = ProductionSubscriptionId,
-            DisplayName = "Contoso Production - Rightsizing Opportunities (Demo)",
+            DisplayName = "Contoso Production (Demo)",
             TenantId = "72f988bf-86f1-41af-91ab-2d7cd011db47",
             State = "Enabled",
-            IsDemo = true
+            IsDemo = true,
+            OptimizationFocus = "Rightsizing",
+            ScenarioSummary = "Find oversized production VMs and an underutilized App Service plan with measured headroom for lower-cost SKUs."
         },
         new()
         {
             SubscriptionId = EngineeringSubscriptionId,
-            DisplayName = "Contoso Engineering - Scheduling Opportunities (Demo)",
+            DisplayName = "Contoso Engineering (Demo)",
             TenantId = "72f988bf-86f1-41af-91ab-2d7cd011db47",
             State = "Enabled",
-            IsDemo = true
+            IsDemo = true,
+            OptimizationFocus = "Scheduling",
+            ScenarioSummary = "Identify development and QA VMs that can be deallocated outside weekday business hours while retaining storage."
         },
         new()
         {
             SubscriptionId = LegacySubscriptionId,
-            DisplayName = "Contoso Legacy Estate - Cleanup Opportunities (Demo)",
+            DisplayName = "Contoso Legacy Estate (Demo)",
             TenantId = "72f988bf-86f1-41af-91ab-2d7cd011db47",
             State = "Enabled",
-            IsDemo = true
+            IsDemo = true,
+            OptimizationFocus = "Cleanup",
+            ScenarioSummary = "Remove unattached managed disks, an empty App Service plan, and an unassociated static public IP."
         }
     ];
 

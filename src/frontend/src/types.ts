@@ -16,6 +16,8 @@ export interface SubscriptionInfo {
   tenantId?: string;
   state: string;
   isDemo: boolean;
+  optimizationFocus?: string;
+  scenarioSummary?: string;
 }
 
 export interface CostBreakdown {

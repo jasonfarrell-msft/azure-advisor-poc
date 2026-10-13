@@ -91,13 +91,14 @@ export const Navbar: React.FC<NavbarProps> = ({
 
             {/* Subscription Selector */}
             <select
+              aria-label="Azure subscription"
               value={selectedSubscriptionId}
               onChange={(e) => onSubscriptionChange(e.target.value)}
-              className="bg-slate-800 text-slate-200 text-xs rounded-lg border border-slate-700 px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 max-w-xs"
+              className="bg-slate-800 text-slate-200 text-xs rounded-lg border border-slate-700 px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 max-w-sm"
             >
               {subscriptions.map((sub) => (
                 <option key={sub.subscriptionId} value={sub.subscriptionId}>
-                  {sub.displayName} ({sub.subscriptionId.substring(0, 8)}...)
+                  {sub.displayName}{sub.optimizationFocus ? ` — ${sub.optimizationFocus}` : ''}
                 </option>
               ))}
             </select>

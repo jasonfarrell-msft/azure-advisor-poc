@@ -13,6 +13,7 @@ It combines a deterministic calculation engine with Azure AI Foundry (`gpt-5.4-m
      - **Contoso Production**: underutilized virtual machines and App Service plans that produce rightsizing recommendations.
      - **Contoso Engineering**: non-production virtual machines that produce automated scheduling recommendations.
      - **Contoso Legacy Estate**: unattached disks, an empty App Service plan, and an unassociated public IP that produce cleanup recommendations.
+     - The dashboard labels each subscription with its optimization focus, explains the selected scenario, and automatically clears and refreshes recommendations when a different demo subscription is selected.
    - **Live Azure Mode**: Discovers tenant subscriptions accessible to the local user via Azure CLI (`az account list`) and ARM credentials. Ingests assets using Azure Resource Graph and Azure Monitor Metrics.
 
 2. **Deterministic FinOps Engines**:
@@ -69,8 +70,14 @@ Open `http://localhost:5173` in your browser.
 
 ## Running the Unit Tests
 
-The test suite validates portfolio conflict resolution (double-counting prevention), threshold rightsizing, retained storage drag, and Resource Graph property deserialization:
+The backend test suite validates portfolio conflict resolution (double-counting prevention), threshold rightsizing, retained storage drag, demo subscription scenarios, and Resource Graph property deserialization:
 
 ```bash
 dotnet test AzureCostAdvisor.slnx
+```
+
+The frontend test suite validates demo scenario discovery, automatic initial loading, clearing previous results when a scan starts, and protection against stale scan responses:
+
+```bash
+npm test --prefix src/frontend
 ```
