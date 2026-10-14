@@ -8,6 +8,7 @@ public enum AdvisorMode
 
 public enum RecommendationCategory
 {
+    Reservation,
     Rightsizing,
     Scheduling,
     Removal
@@ -15,6 +16,7 @@ public enum RecommendationCategory
 
 public enum RecommendationAction
 {
+    PurchaseReservation,
     Resize,
     ScheduledShutdown,
     DeleteOrphan

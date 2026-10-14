@@ -4,12 +4,15 @@ using AzureCostAdvisor.Core.Interfaces;
 using AzureCostAdvisor.Core.Models;
 using AzureCostAdvisor.Core.Providers;
 using Microsoft.AspNetCore.Mvc;
+using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services
 builder.Services.AddOpenApi();
 builder.Services.AddHttpClient<IRetailPricesClient, RetailPricesClient>();
+builder.Services.ConfigureHttpJsonOptions(options =>
+    options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
 // Ingestion Providers
 builder.Services.AddSingleton<SyntheticDemoDataProvider>();
@@ -17,6 +20,7 @@ builder.Services.AddSingleton<LiveAzureDataProvider>();
 
 // FinOps Detectors
 builder.Services.AddSingleton<IFinOpsDetector, RightsizingDetector>();
+builder.Services.AddSingleton<IFinOpsDetector, ReservationDetector>();
 builder.Services.AddSingleton<IFinOpsDetector, SchedulingDetector>();
 builder.Services.AddSingleton<IFinOpsDetector, OrphanResourceDetector>();
 
@@ -25,15 +29,11 @@ builder.Services.AddSingleton<IPortfolioConflictResolver, PortfolioConflictResol
 
 // Azure AI Foundry Configuration
 var foundryConfig = builder.Configuration.GetSection("AzureAiFoundry");
-var endpoint = string.IsNullOrWhiteSpace(foundryConfig["Endpoint"])
-    ? "https://foundry-sandbox-swc-mx01.openai.azure.com/"
-    : foundryConfig["Endpoint"];
+var endpoint = foundryConfig["Endpoint"];
 var deployment = string.IsNullOrWhiteSpace(foundryConfig["DeploymentName"])
     ? "gpt-5.4-mini"
     : foundryConfig["DeploymentName"];
-var project = string.IsNullOrWhiteSpace(foundryConfig["ProjectName"])
-    ? "finops-advisor-project"
-    : foundryConfig["ProjectName"];
+var project = foundryConfig["ProjectName"];
 
 builder.Services.AddSingleton<IAiContextExplainer>(sp =>
     new AiContextExplainer(endpoint, deployment, project));

@@ -1,8 +1,10 @@
-param staticWebAppName string
+param staticWebAppId string
 param linkName string
 param backendResourceId string
 param region string
 param environmentName string = 'default'
+
+var staticWebAppName = last(split(staticWebAppId, '/'))
 
 resource staticWebApp 'Microsoft.Web/staticSites@2025-05-01' existing = {
   name: staticWebAppName

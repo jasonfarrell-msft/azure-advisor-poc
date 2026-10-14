@@ -135,7 +135,9 @@ public class LiveAzureDataProvider : IAzureDataProvider
                 'microsoft.compute/disks',
                 'microsoft.network/publicipaddresses'
             )
-            | project id, name, type, kind, location, resourceGroup, subscriptionId, sku, tags, properties
+            | extend powerState = tostring(properties.extended.instanceView.powerState.code)
+            | extend osType = tostring(properties.storageProfile.osDisk.osType)
+            | project id, name, type, kind, location, resourceGroup, subscriptionId, sku, tags, properties, powerState, osType
             | order by id asc
         ";
 
@@ -197,6 +199,18 @@ public class LiveAzureDataProvider : IAzureDataProvider
                                 {
                                     propsDict[prop.Name] = ConvertJsonElement(prop.Value);
                                 }
+                            }
+                            if (elem.TryGetProperty("powerState", out var powerState) &&
+                                powerState.ValueKind == JsonValueKind.String &&
+                                !string.IsNullOrWhiteSpace(powerState.GetString()))
+                            {
+                                propsDict["powerState"] = powerState.GetString();
+                            }
+                            if (elem.TryGetProperty("osType", out var osType) &&
+                                osType.ValueKind == JsonValueKind.String &&
+                                !string.IsNullOrWhiteSpace(osType.GetString()))
+                            {
+                                propsDict["osType"] = osType.GetString();
                             }
 
                             resources.Add(new AzureResource

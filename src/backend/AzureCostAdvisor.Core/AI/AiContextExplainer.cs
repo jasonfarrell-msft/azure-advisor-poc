@@ -25,11 +25,9 @@ public class AiContextExplainer : IAiContextExplainer
 
     public AiContextExplainer(string? endpoint = null, string? deploymentName = null, string? projectName = null, TokenCredential? credential = null)
     {
-        _endpoint = string.IsNullOrWhiteSpace(endpoint)
-            ? "https://foundry-sandbox-swc-mx01.openai.azure.com/"
-            : endpoint;
+        _endpoint = endpoint?.Trim() ?? string.Empty;
         _deploymentName = string.IsNullOrWhiteSpace(deploymentName) ? "gpt-5.4-mini" : deploymentName;
-        _projectName = string.IsNullOrWhiteSpace(projectName) ? "finops-advisor-project" : projectName;
+        _projectName = projectName?.Trim() ?? string.Empty;
         _credential = credential ?? new DefaultAzureCredential(new DefaultAzureCredentialOptions
         {
             ExcludeInteractiveBrowserCredential = true
@@ -163,6 +161,19 @@ CRITICAL CONSTRAINTS:
     {
         return card.Category switch
         {
+            RecommendationCategory.Reservation => new AiExplanationResult
+            {
+                ExecutiveSummary = $"A 1-year Reserved Instance for {card.ResourceName} could reduce baseline compute spend by {card.Costs.NetMonthlySavings:C2}/month without changing its current VM size.",
+                WorkloadContextAnalysis = $"Production classification and {card.Evidence.TelemetryWindowDays}-day telemetry show stable, continuously running demand with average CPU of {card.Evidence.AverageCpuPercent ?? 0:F1}%.",
+                RiskAssessment = "Medium financial commitment risk. Validate long-term workload demand and reservation scope before purchase; the recommendation does not change runtime capacity.",
+                ImplementationSteps = card.Prerequisites,
+                RollbackStrategy = card.RollbackGuidance,
+                TradeoffsAndAlternatives = "Complete any rightsizing first. Compare a Reserved Instance with an Azure savings plan when usage may shift across eligible compute services, regions, or VM families.",
+                IsAiGenerated = false,
+                ModelUsed = "Deterministic FinOps Engine (Foundry Fallback)",
+                GeneratedAtUtc = DateTime.UtcNow
+            },
+
             RecommendationCategory.Rightsizing => new AiExplanationResult
             {
                 ExecutiveSummary = $"Downsizing {card.ResourceName} to {card.TargetSku} reduces monthly commitment by {card.Costs.NetMonthlySavings:C2} while preserving sufficient resource headroom.",

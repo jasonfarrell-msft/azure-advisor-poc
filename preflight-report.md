@@ -1,6 +1,6 @@
 # Azure Deployment Preflight Report
 
-**Generated:** 2026-10-13T08:55:00Z
+**Generated:** 2026-10-14T02:05:00Z
 **Status:** Pass with warnings
 
 ---
@@ -21,7 +21,7 @@
 | Check | Status | Details |
 |-------|--------|---------|
 | Bicep Syntax | Pass with warnings | Template compiled successfully; Bicep emitted type-availability warnings for newer resource API versions. |
-| What-If Analysis | Pass with warnings | Completed without predicted creates, deletes, or explicit property modifications; 13 resources were marked Deploy, 3 Ignore, and 2 role assignments were unsupported for analysis. |
+| What-If Analysis | Pass with warnings | A clean deployment predicted 13 resource creates, no deletes, and one generated role assignment that could not be analyzed until deployment. |
 | Permission Check | Pass | Provider-level validation completed with the authenticated Azure CLI identity. |
 
 ---
@@ -33,7 +33,12 @@
 | Step | Command | Result |
 |------|---------|--------|
 | 1 | `az bicep build --file infra/main.bicep --stdout` | Compiled successfully with BCP081 warnings |
-| 2 | `az deployment sub what-if --location eastus2 --template-file infra/main.bicep --parameters @infra/main.parameters.json --validation-level Provider --result-format ResourceIdOnly` | Completed with deploy/ignore/unsupported predictions |
+| 2 | `az deployment sub what-if --location eastus2 --template-file infra/main.bicep --parameters environmentName=azureadvisor-validate nameSuffix=abc123 location=eastus2 staticWebAppLocation=centralus acrPublicNetworkAccessEnabled=true acrBootstrapIpAddress=203.0.113.10/32 --validation-level Provider --result-format ResourceIdOnly` | Completed with 13 creates, no deletes, and one unsupported role assignment |
+| 3 | `bash -n scripts/deploy.sh` | Deployment script syntax passed |
+| 4 | `dotnet test AzureCostAdvisor.slnx --no-restore --nologo` | 13 tests passed |
+| 5 | `npm test --prefix src/frontend -- --run` | 6 tests passed |
+| 6 | `npm run build --prefix src/frontend -- --emptyOutDir` | Production build succeeded |
+| 7 | `npm audit --prefix src/frontend --omit=dev --audit-level=high` | No production dependency vulnerabilities |
 
 ### Tool Versions
 
@@ -56,11 +61,11 @@
 - **Message:** BCP081 was emitted for the `2025-05-01`, `2026-05-01`, and `2026-07-01` resource API versions, including Container Apps auth configuration, because Bicep 0.47.16 does not include their type metadata.
 - **Recommendation:** Upgrade the Bicep CLI and rerun validation when a release containing these schemas is available. Azure provider validation accepted the template.
 
-#### Some existing resources cannot be fully predicted
+#### Generated role assignment cannot be fully predicted
 
 - **Source:** What-if
-- **Message:** Existing resources were marked Deploy or Ignore. The ACR pull and Azure AI Foundry inference role assignments were unsupported because their generated resource IDs depend on deployment-time identity output.
-- **Recommendation:** Continue using code-only deployments for application updates. Review a full property-level what-if before any infrastructure change.
+- **Message:** The ACR pull role assignment was unsupported because its generated resource ID depends on the managed identity principal ID produced during deployment. Optional Foundry RBAC was not enabled for this validation.
+- **Recommendation:** Review the script's Provider-level what-if and ensure the deployer can create role assignments before proceeding.
 
 ---
 
@@ -70,34 +75,29 @@
 
 | Change Type | Count |
 |-------------|-------|
-| Create | 0 |
+| Create | 13 |
 | Modify | 0 explicitly predicted |
 | Delete | 0 |
-| Deploy (change unknown) | 13 |
-| Ignore | 3 |
-| Unsupported | 2 |
+| Deploy (change unknown) | 0 |
+| Ignore | 0 |
+| Unsupported | 1 |
 
-No resources were predicted for deletion. The predicted deployments include the existing Container App, its `authConfigs/current` child resource, the Static Web App linked backend, and the least-privilege Foundry role assignment.
+No resources were predicted for deletion. The clean deployment includes the resource group, VNet, private DNS, ACR private endpoint, managed identity, Premium ACR, Container Apps environment and API, Easy Auth configuration, Standard Static Web App, and linked backend.
 
 ---
 
 ## Recommendations
 
-1. Keep `infra/main.parameters.json` pinned to the deployed ACR image digest.
-2. Use immutable image digests for Container Apps revisions instead of mutable tags.
-3. Keep Container Apps Easy Auth enabled with the Azure Static Web Apps provider so the public backend hostname cannot bypass frontend authorization.
-4. Upgrade Bicep before making future infrastructure changes so the latest resource API versions receive local type validation.
+1. Use `scripts/deploy.sh` rather than deploying `infra/main.parameters.json` directly; the script performs the secure two-phase image build and pins the final Container App revision to an immutable digest.
+2. Enable `--enable-live-reader` only when live subscription scanning is required.
+3. Supply Foundry parameters only for an existing account and model deployment; deterministic explanations are the secure default.
+4. Upgrade Bicep before future infrastructure changes so the latest resource API versions receive local type validation.
 
 ---
 
 ## Next Steps
 
-Deployment completed after this preflight:
-
-- Backend image digest `sha256:07b173d6dce9838accadb46dc7240d87064b81a801bad5026b66c6cbcfa29e58` is active on healthy revision `ca-azure-advisor-dev-46b2-eus2--0000004` with 100% traffic.
-- Container Apps Easy Auth is enabled with the Azure Static Web Apps provider; unauthenticated direct backend requests return HTTP 401.
-- The managed identity has **Cognitive Services OpenAI User** at the Foundry account scope.
-- The frontend production bundle was deployed to `https://white-field-0e69d3010.2.azurestaticapps.net`; unauthenticated frontend and API requests redirect to Entra sign-in.
+This validation used what-if only and did not create the `azureadvisor-validate` resources. Run `./scripts/deploy.sh --help` for deployment options.
 
 ---
 

@@ -118,6 +118,53 @@ public class RetailPricesClient : IRetailPricesClient
         return 0.15m;
     }
 
+    public async Task<decimal?> GetReservationHourlyPriceAsync(
+        string armSkuName,
+        string region,
+        string term = "1 Year",
+        string os = "Linux",
+        CancellationToken ct = default)
+    {
+        var cacheKey = $"reservation:{armSkuName}:{region}:{term}:{os}";
+        if (_priceCache.TryGetValue(cacheKey, out var cached))
+        {
+            return cached;
+        }
+
+        try
+        {
+            var cleanSku = armSkuName.Trim();
+            var filter = $"armRegionName eq '{region}' and armSkuName eq '{cleanSku}' and priceType eq 'Reservation'";
+            var url = $"https://prices.azure.com/api/retail/prices?$filter={Uri.EscapeDataString(filter)}";
+
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            cts.CancelAfter(TimeSpan.FromSeconds(3));
+
+            var response = await _httpClient.GetFromJsonAsync<AzureRetailPriceResponse>(url, cts.Token);
+            var candidate = response?.Items.FirstOrDefault(item =>
+                item.ReservationTerm.Equals(term, StringComparison.OrdinalIgnoreCase) &&
+                !item.ProductName.Contains("Windows", StringComparison.OrdinalIgnoreCase) &&
+                (item.ArmSkuName.Equals(cleanSku, StringComparison.OrdinalIgnoreCase) ||
+                 item.SkuName.Equals(cleanSku, StringComparison.OrdinalIgnoreCase)));
+
+            if (candidate is { RetailPrice: > 0 })
+            {
+                var termHours = term.Equals("3 Years", StringComparison.OrdinalIgnoreCase)
+                    ? 3m * 365m * 24m
+                    : 365m * 24m;
+                var effectiveHourly = Math.Round(candidate.RetailPrice / termHours, 6);
+                _priceCache[cacheKey] = effectiveHourly;
+                return effectiveHourly;
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
+        {
+            // Reservation availability is optional; no recommendation is emitted when pricing cannot be verified.
+        }
+
+        return null;
+    }
+
     public Task<decimal> GetMonthlyStoragePriceAsync(string skuName, string region, CancellationToken ct = default)
     {
         if (FallbackMonthlyDiskPrices.TryGetValue(skuName, out var price))
@@ -167,4 +214,7 @@ public class AzureRetailPriceItem
 
     [JsonPropertyName("unitOfMeasure")]
     public string UnitOfMeasure { get; set; } = "";
+
+    [JsonPropertyName("reservationTerm")]
+    public string ReservationTerm { get; set; } = "";
 }

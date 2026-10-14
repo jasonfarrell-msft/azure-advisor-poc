@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { RecommendationCard, RecommendationCategory, RiskLevel, RecommendationStatus } from '../types';
-import { Search, ArrowUpRight, Calendar, Trash2, Cpu, Clock, CheckCircle2, AlertCircle, Sparkles } from 'lucide-react';
+import { Search, ArrowUpRight, Calendar, Trash2, Cpu, Clock, CheckCircle2, AlertCircle, Sparkles, BadgeDollarSign } from 'lucide-react';
 
 interface RecommendationTableProps {
   recommendations: RecommendationCard[];
@@ -36,6 +36,13 @@ export const RecommendationTable: React.FC<RecommendationTableProps> = ({
 
   const getCategoryBadge = (cat: RecommendationCategory) => {
     switch (cat) {
+      case 'Reservation':
+        return (
+          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-800">
+            <BadgeDollarSign className="w-3 h-3 mr-1" />
+            Reservation
+          </span>
+        );
       case 'Rightsizing':
         return (
           <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
@@ -82,6 +89,17 @@ export const RecommendationTable: React.FC<RecommendationTableProps> = ({
         </span>
       );
     }
+    if (status === 'ReviewRequired') {
+      return (
+        <span
+          title={exclusionReason || 'Validation is required before savings can be counted as realizable'}
+          className="inline-flex items-center text-xs px-2 py-0.5 rounded-full font-medium bg-blue-50 text-blue-800 border border-blue-300 cursor-help"
+        >
+          <AlertCircle className="w-3 h-3 mr-1 text-blue-600" />
+          Review required
+        </span>
+      );
+    }
     return (
       <span
         title={exclusionReason || 'Double-counting prevented by conflict resolver'}
@@ -118,6 +136,7 @@ export const RecommendationTable: React.FC<RecommendationTableProps> = ({
             className="bg-white border border-slate-300 text-slate-700 text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="All">All Categories</option>
+            <option value="Reservation">Reservation</option>
             <option value="Rightsizing">Rightsizing</option>
             <option value="Scheduling">Scheduling</option>
             <option value="Removal">Removal</option>
@@ -144,6 +163,7 @@ export const RecommendationTable: React.FC<RecommendationTableProps> = ({
           >
             <option value="All">All Statuses</option>
             <option value="Actionable">Actionable Only</option>
+            <option value="ReviewRequired">Review Required</option>
             <option value="Overlapped">Overlapped Only</option>
           </select>
 
@@ -161,7 +181,7 @@ export const RecommendationTable: React.FC<RecommendationTableProps> = ({
               <th className="py-3 px-4">Status & Category</th>
               <th className="py-3 px-4">Resource & Recommendation</th>
               <th className="py-3 px-4">Current → Target SKU</th>
-              <th className="py-3 px-4 text-right">Net Savings</th>
+              <th className="py-3 px-4 text-right">Savings</th>
               <th className="py-3 px-4">Risk & Confidence</th>
               <th className="py-3 px-4 text-center">Action</th>
             </tr>
@@ -214,14 +234,19 @@ export const RecommendationTable: React.FC<RecommendationTableProps> = ({
                     </div>
                   </td>
 
-                  {/* Net Monthly Savings */}
+                  {/* Monthly Savings */}
                   <td className="py-3.5 px-4 text-right">
                     <div className={`text-sm font-bold ${
-                      rec.status === 'Overlapped' ? 'text-slate-400 line-through' : 'text-emerald-600'
+                      rec.status === 'Overlapped' ? 'text-slate-400 line-through' :
+                      rec.status === 'ReviewRequired' ? 'text-blue-700' : 'text-emerald-600'
                     }`}>
-                      ${rec.costs.netMonthlySavings.toFixed(2)}
+                      ${(rec.status === 'ReviewRequired'
+                        ? rec.costs.grossMonthlySavings
+                        : rec.costs.netMonthlySavings).toFixed(2)}
                     </div>
-                    <div className="text-[10px] text-slate-400">/ month</div>
+                    <div className="text-[10px] text-slate-400">
+                      {rec.status === 'ReviewRequired' ? 'potential / month' : '/ month'}
+                    </div>
                     {rec.costs.retainedStorageCost > 0 && (
                       <div className="text-[10px] text-purple-700 mt-0.5">
                         (${rec.costs.retainedStorageCost.toFixed(2)} disk kept)

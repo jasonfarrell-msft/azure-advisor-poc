@@ -3,28 +3,19 @@
   "contentVersion": "1.0.0.0",
   "parameters": {
     "environmentName": {
-      "value": "azure-advisor-dev-46b2-eus2"
+      "value": "azureadvisor-dev"
     },
     "location": {
       "value": "eastus2"
     },
-    "sessionId": {
-      "value": "46b21c5d-b57e-413b-8219-f72d001eae54"
-    },
-    "deployedBy": {
-      "value": "Jason Farrell"
-    },
-    "createdAt": {
-      "value": "2026-10-12T23:54:08Z"
+    "staticWebAppLocation": {
+      "value": "centralus"
     },
     "enableSubscriptionReaderAssignment": {
-      "value": true
+      "value": false
     },
     "acrPublicNetworkAccessEnabled": {
-      "value": true
-    },
-    "containerImage": {
-      "value": "crazureadvisordev46b2eus2.azurecr.io/azure-cost-advisor@sha256:07b173d6dce9838accadb46dc7240d87064b81a801bad5026b66c6cbcfa29e58"
+      "value": false
     }
   }
 }

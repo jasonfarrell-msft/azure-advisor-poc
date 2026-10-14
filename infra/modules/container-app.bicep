@@ -12,6 +12,8 @@ param containerPort int = 8080
 param healthProbePath string = '/api/settings/mode'
 param corsAllowedOrigin string
 param foundryEndpoint string
+param foundryDeploymentName string
+param foundryProjectName string
 param staticWebAppClientId string
 
 var isPlaceholder = containerImage == 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
@@ -80,6 +82,14 @@ resource containerApp 'Microsoft.App/containerApps@2026-07-01' = {
               name: 'AzureAiFoundry__Endpoint'
               value: foundryEndpoint
             }
+            {
+              name: 'AzureAiFoundry__DeploymentName'
+              value: foundryDeploymentName
+            }
+            {
+              name: 'AzureAiFoundry__ProjectName'
+              value: foundryProjectName
+            }
           ]
           probes: [
             {
@@ -145,3 +155,4 @@ resource authConfig 'Microsoft.App/containerApps/authConfigs@2026-07-01' = {
 }
 
 output containerAppId string = containerApp.id
+output fqdn string = containerApp.properties.configuration.ingress.fqdn

@@ -25,8 +25,8 @@ const subscriptions: SubscriptionInfo[] = [
     displayName: 'Contoso Production (Demo)',
     state: 'Enabled',
     isDemo: true,
-    optimizationFocus: 'Rightsizing',
-    scenarioSummary: 'Find oversized production resources.'
+    optimizationFocus: 'Reservations & Rightsizing',
+    scenarioSummary: 'Compare stable production usage against reservations and find oversized resources.'
   },
   {
     subscriptionId: 'demo-engineering',
@@ -73,7 +73,7 @@ function createAnalysis(
         subscriptionId,
         location: 'eastus',
         category,
-        action: category === 'Scheduling' ? 'ScheduledShutdown' : category === 'Removal' ? 'DeleteOrphan' : 'Resize',
+        action: category === 'Reservation' ? 'PurchaseReservation' : category === 'Scheduling' ? 'ScheduledShutdown' : category === 'Removal' ? 'DeleteOrphan' : 'Resize',
         title: `${category} ${resourceName}`,
         description: `Optimize ${resourceName}`,
         costs: {
@@ -119,16 +119,17 @@ describe('demo subscription experience', () => {
 
   it('shows all demo scenarios and automatically scans the first subscription', async () => {
     vi.mocked(runAnalysisScan).mockResolvedValue(
-      createAnalysis('demo-production', 'vm-production-rightsize', 'Rightsizing')
+      createAnalysis('demo-production', 'vm-payment-api', 'Reservation')
     );
 
     render(<App />);
 
-    expect(await screen.findByText('vm-production-rightsize')).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: /Contoso Production.*Rightsizing/ })).toBeInTheDocument();
+    expect(await screen.findByText('vm-payment-api')).toBeInTheDocument();
+    expect(screen.getByText('Reservation', { selector: 'span' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /Contoso Production.*Reservations & Rightsizing/ })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: /Contoso Engineering.*Scheduling/ })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: /Contoso Legacy Estate.*Cleanup/ })).toBeInTheDocument();
-    expect(screen.getByText('Demo scenario: Rightsizing')).toBeInTheDocument();
+    expect(screen.getByText('Demo scenario: Reservations & Rightsizing')).toBeInTheDocument();
     expect(screen.getByText(/Foundry configured.*gpt-5.4-mini/)).toBeInTheDocument();
     expect(runAnalysisScan).toHaveBeenCalledWith('demo-production', 'Demo', false);
   });

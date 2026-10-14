@@ -115,6 +115,7 @@ export const KpiSummary: React.FC<KpiSummaryProps> = ({ analysis }) => {
           {Object.entries(analysis.categorySavings).map(([cat, amount]) => (
             <div key={cat} className="flex items-center space-x-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg">
               <span className={`w-2 h-2 rounded-full ${
+                cat === 'Reservation' ? 'bg-emerald-500' :
                 cat === 'Rightsizing' ? 'bg-blue-500' :
                 cat === 'Scheduling' ? 'bg-purple-500' : 'bg-rose-500'
               }`} />

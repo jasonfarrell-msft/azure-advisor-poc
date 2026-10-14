@@ -1,49 +1,46 @@
 targetScope = 'subscription'
 
 @description('Environment name used for tagging and deployment metadata.')
+@minLength(3)
+@maxLength(25)
 param environmentName string
 
+@description('Optional six-character lowercase suffix used for deterministic resource naming. The deployment script derives this from the subscription and environment.')
+@minLength(0)
+@maxLength(6)
+param nameSuffix string = ''
+
 @description('Azure region for regional resources.')
-param location string
+param location string = 'eastus2'
+
+@description('Azure region for Static Web Apps.')
+param staticWebAppLocation string = 'centralus'
 
 @description('Session identifier used for traceability.')
-param sessionId string
+param sessionId string = deployment().name
 
 @description('Display name of the person or automation performing deployment.')
-param deployedBy string
+param deployedBy string = 'azure-advisor-deploy'
 
 @description('RFC3339 timestamp for deployment metadata.')
-param createdAt string
+param createdAt string = utcNow('u')
 
-@description('Resource group name for this deployment.')
-param resourceGroupName string = 'rg-azureadvisor-eus201'
+var uniqueSuffix = empty(nameSuffix)
+  ? take(uniqueString(subscription().id, environmentName), 6)
+  : nameSuffix
 
-@description('Static Web App name.')
-param swaName string = 'swa-azure-advisor-dev-46b2'
-
-@description('Resource group containing the existing Static Web App.')
-param swaResourceGroupName string = 'rg-azureadvisor-cus01'
-
-@description('Container Apps managed environment name.')
-param managedEnvironmentName string = 'cae-azure-advisor-dev-46b2-eus2'
-
-@description('Container App name.')
-param containerAppName string = 'ca-azure-advisor-dev-46b2-eus2'
-
-@description('Container Registry name.')
-param acrName string = 'crazureadvisordev46b2eus2'
-
-@description('Virtual Network name.')
-param vnetName string = 'vnet-azure-advisor-dev-46b2-eus2'
-
-@description('Private Endpoint name for ACR.')
-param privateEndpointName string = 'pe-acr-azure-advisor-dev-46b2-eus2'
+var resourceGroupName = 'rg-${environmentName}-${uniqueSuffix}'
+var swaName = 'swa-${environmentName}-${uniqueSuffix}'
+var managedEnvironmentName = 'cae-${environmentName}-${uniqueSuffix}'
+var containerAppName = 'ca-${environmentName}-${uniqueSuffix}'
+var acrName = take(toLower(replace('cr${environmentName}${uniqueSuffix}', '-', '')), 50)
+var vnetName = 'vnet-${environmentName}-${uniqueSuffix}'
+var privateEndpointName = 'pe-acr-${environmentName}-${uniqueSuffix}'
 
 @description('Private DNS zone name for ACR private link.')
 param privateDnsZoneName string = 'privatelink.azurecr.io'
 
-@description('User-assigned managed identity name.')
-param userAssignedIdentityName string = 'id-azure-advisor-dev-46b2-eus2'
+var userAssignedIdentityName = 'id-${environmentName}-${uniqueSuffix}'
 
 @description('Address prefix for virtual network.')
 param vnetAddressPrefix string = '10.42.0.0/16'
@@ -75,14 +72,20 @@ param backendContainerPort int = 8080
 @description('Static Web App HTTPS origin used in backend CORS configuration. Leave empty to derive from Static Web App default hostname.')
 param allowedFrontendOrigin string = ''
 
-@description('Azure AI Foundry account endpoint used for recommendation enrichment.')
-param foundryEndpoint string = 'https://foundry-sandbox-swc-mx01.openai.azure.com/'
+@description('Optional Azure AI Foundry account endpoint used for recommendation enrichment. Leave empty for deterministic explanations only.')
+param foundryEndpoint string = ''
 
-@description('Resource group containing the existing Azure AI Foundry account.')
-param foundryResourceGroupName string = 'rg-client-sandbox-eus2-mx01'
+@description('Optional resource group containing an existing Azure AI Foundry account.')
+param foundryResourceGroupName string = ''
 
-@description('Existing Azure AI Foundry account name.')
-param foundryAccountName string = 'foundry-sandbox-swc-mx01'
+@description('Optional existing Azure AI Foundry account name.')
+param foundryAccountName string = ''
+
+@description('Azure AI Foundry model deployment name.')
+param foundryDeploymentName string = 'gpt-5.4-mini'
+
+@description('Optional Azure AI Foundry project name shown in the UI.')
+param foundryProjectName string = ''
 
 @description('Controls Reader role assignment at subscription scope. Keep false until the SWA auth routes and operator role are deployed and verified.')
 param enableSubscriptionReaderAssignment bool = false
@@ -105,19 +108,6 @@ resource resourceGroup 'Microsoft.Resources/resourceGroups@2023-07-01' = {
   name: resourceGroupName
   location: location
   tags: baseTags
-}
-
-resource swaResourceGroup 'Microsoft.Resources/resourceGroups@2023-07-01' existing = {
-  name: swaResourceGroupName
-}
-
-resource existingStaticWebApp 'Microsoft.Web/staticSites@2025-05-01' existing = {
-  name: swaName
-  scope: swaResourceGroup
-}
-
-resource foundryResourceGroup 'Microsoft.Resources/resourceGroups@2023-07-01' existing = {
-  name: foundryResourceGroupName
 }
 
 module network 'modules/network.bicep' = {
@@ -192,6 +182,16 @@ module managedEnvironment 'modules/managed-environment.bicep' = {
   }
 }
 
+module staticWebApp 'modules/static-web-app.bicep' = {
+  name: 'staticWebApp'
+  scope: resourceGroup
+  params: {
+    name: swaName
+    location: staticWebAppLocation
+    tags: baseTags
+  }
+}
+
 module containerApp 'modules/container-app.bicep' = {
   name: 'containerApp'
   scope: resourceGroup
@@ -209,18 +209,20 @@ module containerApp 'modules/container-app.bicep' = {
     containerPort: backendContainerPort
     healthProbePath: '/api/settings/mode'
     foundryEndpoint: foundryEndpoint
-    staticWebAppClientId: existingStaticWebApp.properties.defaultHostname
+    foundryDeploymentName: foundryDeploymentName
+    foundryProjectName: foundryProjectName
+    staticWebAppClientId: staticWebApp.outputs.defaultHostname
     corsAllowedOrigin: empty(allowedFrontendOrigin)
-      ? 'https://${existingStaticWebApp.properties.defaultHostname}'
+      ? 'https://${staticWebApp.outputs.defaultHostname}'
       : allowedFrontendOrigin
   }
 }
 
 module linkedBackend 'modules/linked-backend.bicep' = {
   name: 'linkedBackend'
-  scope: swaResourceGroup
+  scope: resourceGroup
   params: {
-    staticWebAppName: swaName
+    staticWebAppId: staticWebApp.outputs.staticWebAppId
     linkName: containerAppName
     backendResourceId: containerApp.outputs.containerAppId
     region: location
@@ -239,9 +241,9 @@ module roleAssignments 'modules/role-assignments.bicep' = {
   }
 }
 
-module foundryRoleAssignment 'modules/foundry-role-assignment.bicep' = {
+module foundryRoleAssignment 'modules/foundry-role-assignment.bicep' = if (!empty(foundryAccountName) && !empty(foundryResourceGroupName) && !empty(foundryEndpoint)) {
   name: 'foundryRoleAssignment'
-  scope: foundryResourceGroup
+  scope: az.resourceGroup(foundryResourceGroupName)
   params: {
     foundryAccountName: foundryAccountName
     managedIdentityPrincipalId: identity.outputs.principalId
@@ -265,3 +267,11 @@ resource subscriptionReaderAssignment 'Microsoft.Authorization/roleAssignments@2
     principalType: 'ServicePrincipal'
   }
 }
+
+output deployedResourceGroupName string = resourceGroupName
+output deployedStaticWebAppName string = swaName
+output staticWebAppHostname string = staticWebApp.outputs.defaultHostname
+output deployedContainerAppName string = containerAppName
+output containerAppFqdn string = containerApp.outputs.fqdn
+output deployedAcrName string = acrName
+output managedIdentityPrincipalId string = identity.outputs.principalId

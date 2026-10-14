@@ -1,8 +1,8 @@
 export type AdvisorMode = 'Live' | 'Demo';
 
-export type RecommendationCategory = 'Rightsizing' | 'Scheduling' | 'Removal';
+export type RecommendationCategory = 'Reservation' | 'Rightsizing' | 'Scheduling' | 'Removal';
 
-export type RecommendationAction = 'Resize' | 'ScheduledShutdown' | 'DeleteOrphan';
+export type RecommendationAction = 'PurchaseReservation' | 'Resize' | 'ScheduledShutdown' | 'DeleteOrphan';
 
 export type RiskLevel = 'Safe' | 'Low' | 'Medium' | 'High';
 

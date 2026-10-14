@@ -179,6 +179,78 @@ public class FinOpsEngineTests
     }
 
     [Fact]
+    public async Task ReservationDetector_IdentifiesStableProductionVm_WithVerifiedReservationPrice()
+    {
+        var detector = new ReservationDetector();
+        var vm = new AzureResource
+        {
+            Id = "/subscriptions/sub-1/resourceGroups/rg-prod/providers/Microsoft.Compute/virtualMachines/vm-api",
+            Name = "vm-api",
+            Type = "Microsoft.Compute/virtualMachines",
+            Location = "eastus",
+            ResourceGroup = "rg-prod",
+            SubscriptionId = "sub-1",
+            SkuName = "Standard_D4s_v5",
+            Tags = new(StringComparer.OrdinalIgnoreCase) { ["Environment"] = "Production" },
+            Properties = new() { ["powerState"] = "VM running", ["osType"] = "Linux" }
+        };
+        var cpu = new ResourceMetricSummary
+        {
+            ResourceId = vm.Id,
+            MetricName = "Percentage CPU",
+            Average = 38,
+            Percentile95 = 64,
+            Maximum = 82,
+            SampleCount = 336,
+            WindowStartUtc = DateTime.UtcNow.AddDays(-14),
+            WindowEndUtc = DateTime.UtcNow
+        };
+
+        var recommendations = await detector.DetectAsync([vm], [cpu], _pricingClient);
+
+        var recommendation = Assert.Single(recommendations);
+        Assert.Equal(RecommendationCategory.Reservation, recommendation.Category);
+        Assert.Equal(RecommendationAction.PurchaseReservation, recommendation.Action);
+        Assert.Equal(PricingBasis.CommitmentAdjusted, recommendation.Costs.Basis);
+        Assert.Equal(52.56m, recommendation.Costs.GrossMonthlySavings);
+        Assert.Equal(0m, recommendation.Costs.NetMonthlySavings);
+        Assert.Equal(RecommendationStatus.ReviewRequired, recommendation.Status);
+        Assert.Contains("existing reservation", recommendation.Costs.ExclusionReason);
+    }
+
+    [Fact]
+    public async Task ReservationDetector_RejectsWindowsVm_WhenOsAwareSavingsAreUnavailable()
+    {
+        var detector = new ReservationDetector();
+        var vm = new AzureResource
+        {
+            Id = "/subscriptions/sub-1/resourceGroups/rg-dev/providers/Microsoft.Compute/virtualMachines/vm-dev",
+            Name = "vm-dev",
+            Type = "Microsoft.Compute/virtualMachines",
+            Location = "eastus",
+            ResourceGroup = "rg-dev",
+            SubscriptionId = "sub-1",
+            SkuName = "Standard_D4s_v5",
+            Tags = new(StringComparer.OrdinalIgnoreCase) { ["Environment"] = "Production" },
+            Properties = new() { ["powerState"] = "VM running", ["osType"] = "Windows" }
+        };
+        var cpu = new ResourceMetricSummary
+        {
+            ResourceId = vm.Id,
+            MetricName = "Percentage CPU",
+            Average = 38,
+            Percentile95 = 64,
+            SampleCount = 336,
+            WindowStartUtc = DateTime.UtcNow.AddDays(-14),
+            WindowEndUtc = DateTime.UtcNow
+        };
+
+        var recommendations = await detector.DetectAsync([vm], [cpu], _pricingClient);
+
+        Assert.Empty(recommendations);
+    }
+
+    [Fact]
     public async Task SchedulingDetector_CalculatesAvoidedComputeAndRetainsStorageDrag()
     {
         // Arrange
@@ -337,6 +409,21 @@ public class FinOpsEngineTests
     }
 
     [Fact]
+    public void AiContextExplainer_RequiresAnExplicitFoundryEndpoint()
+    {
+        var deterministicOnly = new AiContextExplainer();
+        var configured = new AiContextExplainer(
+            "https://example-foundry.openai.azure.com/",
+            "gpt-5.4-mini",
+            "example-project");
+
+        Assert.False(deterministicOnly.IsConfigured);
+        Assert.True(configured.IsConfigured);
+        Assert.Equal("gpt-5.4-mini", configured.DeploymentName);
+        Assert.Equal("example-project", configured.ProjectName);
+    }
+
+    [Fact]
     public async Task SyntheticDemoDataProvider_OffersThreeSubscriptions_WithDistinctRecommendationScenarios()
     {
         var demoProvider = new SyntheticDemoDataProvider();
@@ -350,29 +437,30 @@ public class FinOpsEngineTests
         Assert.Equal(3, subscriptions.Select(subscription => subscription.OptimizationFocus).Distinct().Count());
         Assert.Equal(TimeSpan.FromSeconds(10), SyntheticDemoDataProvider.SimulatedScanDuration);
 
-        var expectedRecommendations = new Dictionary<string, (RecommendationCategory Category, string[] ResourceNames)>
+        var expectedRecommendations = new Dictionary<string, Dictionary<string, RecommendationCategory>>
         {
             [SyntheticDemoDataProvider.ProductionSubscriptionId] =
-                (RecommendationCategory.Rightsizing,
-                [
-                    "asp-customer-portal",
-                    "vm-analytics-worker",
-                    "vm-order-processor"
-                ]),
+                new()
+                {
+                    ["asp-customer-portal"] = RecommendationCategory.Rightsizing,
+                    ["vm-analytics-worker"] = RecommendationCategory.Rightsizing,
+                    ["vm-order-processor"] = RecommendationCategory.Rightsizing,
+                    ["vm-payment-api"] = RecommendationCategory.Reservation
+                },
             [SyntheticDemoDataProvider.EngineeringSubscriptionId] =
-                (RecommendationCategory.Scheduling,
-                [
-                    "vm-dev-integration-runner",
-                    "vm-qa-testing-node"
-                ]),
+                new()
+                {
+                    ["vm-dev-integration-runner"] = RecommendationCategory.Scheduling,
+                    ["vm-qa-testing-node"] = RecommendationCategory.Scheduling
+                },
             [SyntheticDemoDataProvider.LegacySubscriptionId] =
-                (RecommendationCategory.Removal,
-                [
-                    "asp-abandoned-poc",
-                    "disk-unattached-migrated-db",
-                    "disk-unattached-temp-scratch",
-                    "pip-legacy-bastion-static"
-                ])
+                new()
+                {
+                    ["asp-abandoned-poc"] = RecommendationCategory.Removal,
+                    ["disk-unattached-migrated-db"] = RecommendationCategory.Removal,
+                    ["disk-unattached-temp-scratch"] = RecommendationCategory.Removal,
+                    ["pip-legacy-bastion-static"] = RecommendationCategory.Removal
+                }
         };
 
         foreach (var subscription in subscriptions)
@@ -384,12 +472,11 @@ public class FinOpsEngineTests
 
             var expected = expectedRecommendations[subscription.SubscriptionId];
 
-            Assert.Equal(expected.ResourceNames.Length, analysis.Recommendations.Count);
-            Assert.All(
-                analysis.Recommendations,
-                recommendation => Assert.Equal(expected.Category, recommendation.Category));
+            Assert.Equal(expected.Count, analysis.Recommendations.Count);
+            Assert.All(analysis.Recommendations, recommendation =>
+                Assert.Equal(expected[recommendation.ResourceName], recommendation.Category));
             Assert.Equal(
-                expected.ResourceNames,
+                expected.Keys.OrderBy(resourceName => resourceName, StringComparer.Ordinal).ToArray(),
                 analysis.Recommendations
                     .Select(recommendation => recommendation.ResourceName)
                     .OrderBy(resourceName => resourceName, StringComparer.Ordinal)
@@ -488,6 +575,7 @@ public class FinOpsEngineTests
         return new CostAdvisorOrchestrator(
             [
                 new RightsizingDetector(),
+                new ReservationDetector(),
                 new SchedulingDetector(),
                 new OrphanResourceDetector()
             ],
@@ -525,6 +613,18 @@ public class FinOpsEngineTests
             CancellationToken ct = default)
         {
             return Task.FromResult(HourlyPrices[armSkuName]);
+        }
+
+        public Task<decimal?> GetReservationHourlyPriceAsync(
+            string armSkuName,
+            string region,
+            string term = "1 Year",
+            string os = "Linux",
+            CancellationToken ct = default)
+        {
+            return Task.FromResult<decimal?>(armSkuName.Equals("Standard_D4s_v5", StringComparison.OrdinalIgnoreCase)
+                ? 0.120m
+                : null);
         }
 
         public Task<decimal> GetMonthlyStoragePriceAsync(

@@ -17,6 +17,7 @@
     "tailwind-merge": "^3.0.0"
   },
   "devDependencies": {
+    "@azure/static-web-apps-cli": "2.0.10",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.0",
     "@testing-library/user-event": "^14.6.1",

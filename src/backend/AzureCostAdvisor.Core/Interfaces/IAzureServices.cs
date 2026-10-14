@@ -13,6 +13,7 @@ public interface IAzureDataProvider
 public interface IRetailPricesClient
 {
     Task<decimal> GetHourlyPriceAsync(string armSkuName, string serviceName, string region, string os = "Linux", CancellationToken ct = default);
+    Task<decimal?> GetReservationHourlyPriceAsync(string armSkuName, string region, string term = "1 Year", string os = "Linux", CancellationToken ct = default);
     Task<decimal> GetMonthlyStoragePriceAsync(string skuName, string region, CancellationToken ct = default);
 }
 

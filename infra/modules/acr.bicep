@@ -15,7 +15,7 @@ resource registry 'Microsoft.ContainerRegistry/registries@2025-11-01' = {
     adminUserEnabled: false
     publicNetworkAccess: publicNetworkAccessEnabled ? 'Enabled' : 'Disabled'
     anonymousPullEnabled: false
-    networkRuleBypassOptions: 'None'
+    networkRuleBypassOptions: publicNetworkAccessEnabled ? 'AzureServices' : 'None'
     networkRuleSet: {
       defaultAction: publicNetworkAccessEnabled && empty(bootstrapIpAddress) ? 'Allow' : 'Deny'
       ipRules: publicNetworkAccessEnabled && !empty(bootstrapIpAddress)

@@ -21,8 +21,8 @@ public class SyntheticDemoDataProvider : IAzureDataProvider
             TenantId = "72f988bf-86f1-41af-91ab-2d7cd011db47",
             State = "Enabled",
             IsDemo = true,
-            OptimizationFocus = "Rightsizing",
-            ScenarioSummary = "Find oversized production VMs and an underutilized App Service plan with measured headroom for lower-cost SKUs."
+            OptimizationFocus = "Reservations & Rightsizing",
+            ScenarioSummary = "Compare a stable production VM against a 1-year Reserved Instance while finding oversized resources with measured headroom for lower-cost SKUs."
         },
         new()
         {
@@ -110,7 +110,32 @@ public class SyntheticDemoDataProvider : IAzureDataProvider
                 }
             },
 
-            // 3. Dev/Test VM running 24/7 (Scheduling candidate)
+            // 3. Stable production VM (Reserved Instance candidate)
+            new()
+            {
+                Id = $"/subscriptions/{subscriptionId}/resourceGroups/rg-payments-prod/providers/Microsoft.Compute/virtualMachines/vm-payment-api",
+                Name = "vm-payment-api",
+                Type = "Microsoft.Compute/virtualMachines",
+                Location = "eastus",
+                ResourceGroup = "rg-payments-prod",
+                SubscriptionId = subscriptionId,
+                SkuName = "Standard_D4s_v5",
+                Tags = new(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["Environment"] = "Production",
+                    ["Workload"] = "PaymentApi",
+                    ["Owner"] = "PaymentsTeam"
+                },
+                Properties = new()
+                {
+                    ["osType"] = "Linux",
+                    ["osDiskSizeGb"] = 128,
+                    ["osDiskTier"] = "P10",
+                    ["powerState"] = "VM running"
+                }
+            },
+
+            // 4. Dev/Test VM running 24/7 (Scheduling candidate)
             new()
             {
                 Id = $"/subscriptions/{subscriptionId}/resourceGroups/rg-dev-integration/providers/Microsoft.Compute/virtualMachines/vm-dev-integration-runner",
@@ -135,7 +160,7 @@ public class SyntheticDemoDataProvider : IAzureDataProvider
                 }
             },
 
-            // 4. Staging VM running 24/7 (Scheduling candidate)
+            // 5. Staging VM running 24/7 (Scheduling candidate)
             new()
             {
                 Id = $"/subscriptions/{subscriptionId}/resourceGroups/rg-qa-sandbox/providers/Microsoft.Compute/virtualMachines/vm-qa-testing-node",
@@ -160,7 +185,7 @@ public class SyntheticDemoDataProvider : IAzureDataProvider
                 }
             },
 
-            // 5. Oversized App Service Plan (Rightsizing candidate)
+            // 6. Oversized App Service Plan (Rightsizing candidate)
             new()
             {
                 Id = $"/subscriptions/{subscriptionId}/resourceGroups/rg-web-apps/providers/Microsoft.Web/serverfarms/asp-customer-portal",
@@ -183,7 +208,7 @@ public class SyntheticDemoDataProvider : IAzureDataProvider
                 }
             },
 
-            // 6. Abandoned App Service Plan with 0 apps (Removal candidate)
+            // 7. Abandoned App Service Plan with 0 apps (Removal candidate)
             new()
             {
                 Id = $"/subscriptions/{subscriptionId}/resourceGroups/rg-archived-poc/providers/Microsoft.Web/serverfarms/asp-abandoned-poc",
@@ -206,7 +231,7 @@ public class SyntheticDemoDataProvider : IAzureDataProvider
                 }
             },
 
-            // 7. Unattached Managed Disk - 1TB P30 (Removal candidate)
+            // 8. Unattached Managed Disk - 1TB P30 (Removal candidate)
             new()
             {
                 Id = $"/subscriptions/{subscriptionId}/resourceGroups/rg-storage-legacy/providers/Microsoft.Compute/disks/disk-unattached-migrated-db",
@@ -230,7 +255,7 @@ public class SyntheticDemoDataProvider : IAzureDataProvider
                 }
             },
 
-            // 8. Unattached Managed Disk - 512GB P20 (Removal candidate)
+            // 9. Unattached Managed Disk - 512GB P20 (Removal candidate)
             new()
             {
                 Id = $"/subscriptions/{subscriptionId}/resourceGroups/rg-qa-sandbox/providers/Microsoft.Compute/disks/disk-unattached-temp-scratch",
@@ -253,7 +278,7 @@ public class SyntheticDemoDataProvider : IAzureDataProvider
                 }
             },
 
-            // 9. Unassociated Public IP Address (Removal candidate)
+            // 10. Unassociated Public IP Address (Removal candidate)
             new()
             {
                 Id = $"/subscriptions/{subscriptionId}/resourceGroups/rg-networking-core/providers/Microsoft.Network/publicIPAddresses/pip-legacy-bastion-static",
@@ -282,6 +307,7 @@ public class SyntheticDemoDataProvider : IAzureDataProvider
             {
                 "vm-order-processor",
                 "vm-analytics-worker",
+                "vm-payment-api",
                 "asp-customer-portal"
             },
             EngineeringSubscriptionId => new HashSet<string>(StringComparer.OrdinalIgnoreCase)
@@ -357,6 +383,32 @@ public class SyntheticDemoDataProvider : IAzureDataProvider
                     Average = 18.0,
                     Maximum = 28.0,
                     Percentile95 = 22.0,
+                    Unit = "Percent",
+                    SampleCount = 336,
+                    WindowStartUtc = start,
+                    WindowEndUtc = now
+                });
+            }
+            else if (id.EndsWith("vm-payment-api", StringComparison.OrdinalIgnoreCase))
+            {
+                metrics.Add(new ResourceMetricSummary
+                {
+                    ResourceId = id,
+                    MetricName = "Percentage CPU",
+                    Average = 38.6,
+                    Maximum = 81.4,
+                    Percentile95 = 62.7,
+                    SampleCount = 336,
+                    WindowStartUtc = start,
+                    WindowEndUtc = now
+                });
+                metrics.Add(new ResourceMetricSummary
+                {
+                    ResourceId = id,
+                    MetricName = "Available Memory Bytes",
+                    Average = 58.0,
+                    Maximum = 79.0,
+                    Percentile95 = 72.0,
                     Unit = "Percent",
                     SampleCount = 336,
                     WindowStartUtc = start,
